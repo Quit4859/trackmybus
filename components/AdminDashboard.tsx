@@ -61,7 +61,7 @@ export default function AdminDashboard({
   const [busForm, setBusForm] = useState<Bus>({ id: '', numberPlate: '', driverId: '' });
   const [driverForm, setDriverForm] = useState<Driver>({ id: '', name: '', phone: '', email: '', password: '' });
   const [studentForm, setStudentForm] = useState<Student>({ 
-    id: '', name: '', email: '', password: '', assignedRouteId: '', branch: '', mobileNumber: '', registerNumber: '485'
+    id: '', name: '', email: '', password: '', assignedRouteId: '', branch: '', mobileNumber: '', registerNumber: ''
   });
 
   const [studentSearch, setStudentSearch] = useState('');
@@ -80,9 +80,8 @@ export default function AdminDashboard({
   const fetchOSRMRouteFromCoords = useCallback(async (coordsList: [number, number][]): Promise<[number, number][]> => {
     if (coordsList.length < 2) return coordsList;
     
-    // Abort previous request
     if (osrmControllerRef.current) {
-      osrmControllerRef.current.abort();
+      osrmControllerRef.current.abort("New OSRM request started");
     }
     
     const controller = new AbortController();
@@ -97,8 +96,7 @@ export default function AdminDashboard({
       const data = await response.json();
       if (data.code === 'Ok' && data.routes?.length > 0) return data.routes[0].geometry.coordinates;
     } catch (e: any) { 
-      const msg = e.message?.toLowerCase() || '';
-      if (e.name !== 'AbortError' && !msg.includes('aborted') && !msg.includes('signal is aborted')) {
+      if (e.name !== 'AbortError') {
         console.warn("OSRM fetch failed:", e.message);
       }
     } finally {
@@ -170,13 +168,7 @@ export default function AdminDashboard({
         overviewMarkersRef.current.push(new maplibregl.Marker({ element: el }).setLngLat([busLng, busLat]).addTo(map));
       }
     });
-
-    if (userLocation) {
-      const el = document.createElement('div');
-      el.className = 'w-5 h-5 bg-blue-600 rounded-full border-2 border-white shadow-xl ring-2 ring-blue-100';
-      overviewMarkersRef.current.push(new maplibregl.Marker({ element: el }).setLngLat([userLocation[1], userLocation[0]]).addTo(map));
-    }
-  }, [routes, userLocation, isOverviewMapLoaded]);
+  }, [routes, isOverviewMapLoaded]);
 
   // --- Editor Map Logic ---
   useEffect(() => {
@@ -223,18 +215,15 @@ export default function AdminDashboard({
     return () => { if (mapRef.current) mapRef.current.remove(); mapRef.current = null; };
   }, [isEditing, currentEditTab]);
 
-  // Sync Editor Map Visuals (Prevents Reset on re-renders)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !isEditorMapLoaded) return;
 
-    // Update Path
     const source = map.getSource('route-line') as maplibregl.GeoJSONSource;
     if (source) {
       source.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: tempPath.length > 1 ? tempPath : (tempStops.length > 0 ? [[tempStops[0].lng, tempStops[0].lat]] : [TIPTUR_LNG_LAT]) } } as any);
     }
 
-    // Update Stop Markers
     stopMarkersRef.current.forEach(m => m.remove());
     stopMarkersRef.current = tempStops.map((stop, idx) => {
       const el = document.createElement('div');
@@ -243,17 +232,14 @@ export default function AdminDashboard({
       return new maplibregl.Marker({ element: el }).setLngLat([stop.lng, stop.lat]).addTo(map);
     });
 
-    // Update OSRM Waypoint Markers
     osrmMarkersRef.current.forEach(m => m.remove());
     osrmMarkersRef.current = tempOSRMPoints.map((pt) => {
       const el = document.createElement('div');
       el.className = 'w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-md';
       return new maplibregl.Marker({ element: el }).setLngLat(pt).addTo(map);
     });
-
   }, [tempPath, tempStops, tempOSRMPoints, isEditorMapLoaded, currentEditTab]);
 
-  // Auto-fetch OSRM path when waypoints change
   useEffect(() => {
     if (tempOSRMPoints.length < 2) return;
     const updatePath = async () => {
@@ -317,7 +303,7 @@ export default function AdminDashboard({
   };
 
   const openStudentModal = (student?: Student) => {
-    setStudentForm(student || { id: '', name: '', email: '', password: '', assignedRouteId: '', branch: '', mobileNumber: '', registerNumber: '485' });
+    setStudentForm(student || { id: '', name: '', email: '', password: '', assignedRouteId: '', branch: '', mobileNumber: '', registerNumber: '' });
     setEditingStudentId(student ? student.id : null);
     setIsStudentModalOpen(true);
   };
@@ -340,7 +326,11 @@ export default function AdminDashboard({
     setIsBusModalOpen(false);
   };
 
-  const filteredStudents = students.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.mobileNumber?.includes(studentSearch) || s.registerNumber?.includes(studentSearch));
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
+    s.mobileNumber?.includes(studentSearch) || 
+    s.registerNumber?.includes(studentSearch)
+  );
 
   return (
     <div className="h-full bg-slate-50 flex flex-col overflow-hidden relative">
@@ -413,92 +403,164 @@ export default function AdminDashboard({
         {!isEditing && activeTab === 'student' && (
           <div className="p-6 space-y-4">
             <div className="flex gap-2">
-              <div className="flex-1 relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input type="text" placeholder="Search Name..." className="w-full bg-white border border-slate-200 py-4 pl-12 pr-4 rounded-2xl text-xs font-bold text-slate-900 outline-none" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} /></div>
-              <button onClick={() => openStudentModal()} className="bg-blue-500 text-white p-4 rounded-2xl transition-transform active:scale-95"><Plus className="w-5 h-5" /></button>
+              <div className="flex-1 relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search students..." 
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="w-full bg-white border border-slate-100 rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-blue-100 outline-none"
+                />
+              </div>
+              <button onClick={() => openStudentModal()} className="bg-slate-900 text-white p-4 rounded-2xl"><Plus className="w-5 h-5" /></button>
             </div>
             {filteredStudents.map(s => (
               <div key={s.id} className="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-4"><div className="bg-purple-50 p-3 rounded-xl"><GraduationCap className="w-5 h-5 text-purple-500" /></div><div><span className="font-bold text-slate-900 block">{s.name}</span><span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">{s.registerNumber}</span></div></div>
-                <div className="flex gap-2"><button onClick={() => openStudentModal(s)} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button><button onClick={() => onUpdateStudents(students.filter(std => std.id !== s.id))} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></div>
+                <div className="flex items-center gap-4">
+                  <div className="bg-indigo-50 p-3 rounded-xl"><GraduationCap className="w-5 h-5 text-indigo-500" /></div>
+                  <div>
+                    <span className="font-bold text-slate-900 block">{s.name}</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase">{s.registerNumber} • {s.branch}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openStudentModal(s)} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button>
+                  <button onClick={() => onUpdateStudents(students.filter(std => std.id !== s.id))} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <AnimatePresence>
-        {isEditing && (
-          <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} className="fixed inset-0 z-[100] bg-white flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-              <div><h3 className="text-xl font-black text-slate-900">{editingRouteId ? 'Edit Route' : 'New Route'}</h3><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tempRouteName || 'Unnamed Draft'}</p></div>
-              <div className="flex gap-2"><button onClick={handleSaveAll} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase shadow-lg">Save Changes</button><button onClick={() => setIsEditing(false)} className="p-3 bg-slate-100 rounded-2xl text-slate-500"><X className="w-5 h-5" /></button></div>
-            </div>
-            <div className="flex p-2 bg-slate-50 border-b border-slate-100 shrink-0">
-               {[{ id: 'NAME', icon: Type, label: 'Name' }, { id: 'OSRM', icon: Waypoints, label: 'Path' }, { id: 'STOPS', icon: MapPinPlus, label: 'Stops' }, { id: 'BUS', icon: BusIcon, label: 'Bus' }].map(tab => (
-                 <button key={tab.id} onClick={() => setCurrentEditTab(tab.id as EditorTab)} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentEditTab === tab.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}><tab.icon className="w-3.5 h-3.5" />{tab.label}</button>
-               ))}
-            </div>
-            <div className="flex-1 relative overflow-hidden flex flex-col">
-               {currentEditTab === 'NAME' && (
-                 <div className="p-8 flex flex-col items-center justify-center h-full space-y-4"><Type className="w-12 h-12 text-slate-200 mb-4" /><div className="w-full max-w-sm space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Route Title</label><input className="w-full bg-slate-50 p-6 rounded-[2rem] text-xl font-black text-slate-900 outline-none text-center border-2 border-transparent focus:border-blue-100 transition-all" placeholder="e.g. Campus Express" value={tempRouteName} onChange={e => setTempRouteName(e.target.value)} /></div></div>
-               )}
-               {(currentEditTab === 'OSRM' || currentEditTab === 'STOPS') && (
-                 <div className="relative flex-1 bg-slate-100"><div ref={mapContainerRef} className="absolute inset-0" /><div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-100 pointer-events-none"><p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{currentEditTab === 'OSRM' ? 'Click map to add waypoints' : 'Click map to place stops'}</p></div>
-                   {(currentEditTab === 'OSRM' && tempOSRMPoints.length > 0) && (<button onClick={() => { setTempOSRMPoints([]); }} className="absolute bottom-6 right-6 z-10 bg-white text-red-500 font-black px-6 py-3 rounded-2xl shadow-xl border border-red-50 text-[10px] uppercase tracking-widest">Clear Markers</button>)}
-                   {(currentEditTab === 'STOPS' && tempStops.length > 0) && (<button onClick={() => { setTempStops([]); }} className="absolute bottom-6 right-6 z-10 bg-white text-red-500 font-black px-6 py-3 rounded-2xl shadow-xl border border-red-50 text-[10px] uppercase tracking-widest">Clear Stops</button>)}
-                 </div>
-               )}
-               {currentEditTab === 'BUS' && (
-                 <div className="p-8 space-y-4 overflow-y-auto h-full no-scrollbar bg-slate-50"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-2">Available Fleet</h4>{buses.map(b => (<button key={b.id} onClick={() => setTempBusData({...tempBusData, busId: b.id, numberPlate: b.numberPlate})} className={`w-full p-6 rounded-[2.5rem] border transition-all flex items-center justify-between group ${tempBusData.busId === b.id ? 'bg-yellow-400 border-yellow-300' : 'bg-white border-slate-100'}`}><div className="flex items-center gap-4"><div className="p-4 rounded-2xl bg-slate-50"><BusIcon className="w-6 h-6 text-slate-400" /></div><div className="text-left"><p className="font-black text-slate-900">{b.numberPlate}</p><p className="text-[10px] font-black uppercase tracking-widest">Driver: {drivers.find(d => d.id === b.driverId)?.name || 'Unassigned'}</p></div></div>{tempBusData.busId === b.id && (<div className="bg-slate-900 rounded-full p-1.5 shadow-lg"><Check className="w-4 h-4 text-yellow-400" /></div>)}</button>))}</div>
-               )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isEditing && (
+        <div className="absolute inset-0 z-[2000] bg-white flex flex-col">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+            <button onClick={() => setIsEditing(false)} className="p-2 bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
+            <h3 className="font-black text-slate-900 uppercase tracking-widest text-xs">Route Editor</h3>
+            <button onClick={handleSaveAll} className="p-2 bg-blue-600 text-white rounded-xl"><Check className="w-5 h-5" /></button>
+          </div>
+          
+          <div className="flex p-4 gap-2 overflow-x-auto no-scrollbar">
+            {['NAME', 'OSRM', 'STOPS', 'BUS'].map((tab) => (
+              <button key={tab} onClick={() => setCurrentEditTab(tab as EditorTab)} className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded-xl whitespace-nowrap ${currentEditTab === tab ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                {tab}
+              </button>
+            ))}
+          </div>
 
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {currentEditTab === 'NAME' && (
+              <div className="p-8 space-y-6">
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Route Name</label>
+                    <div className="relative">
+                      <Type className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                      <input type="text" value={tempRouteName} onChange={e => setTempRouteName(e.target.value)} placeholder="e.g. Campus Express" className="w-full bg-slate-50 rounded-2xl p-4 pl-12 text-sm font-bold border-none focus:ring-2 focus:ring-blue-100" />
+                    </div>
+                 </div>
+              </div>
+            )}
+
+            {(currentEditTab === 'OSRM' || currentEditTab === 'STOPS') && (
+              <div className="flex-1 flex flex-col relative">
+                <div ref={mapContainerRef} className="flex-1" />
+                <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-white/50">
+                  <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    {currentEditTab === 'OSRM' ? <Waypoints className="w-3 h-3 text-blue-500" /> : <MapPinPlus className="w-3 h-3 text-slate-900" />}
+                    {currentEditTab === 'OSRM' ? 'Tap road waypoints for path' : 'Tap to place bus stops'}
+                  </p>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => currentEditTab === 'OSRM' ? setTempOSRMPoints([]) : setTempStops([])} className="px-4 py-2 bg-slate-100 rounded-xl text-[9px] font-black uppercase text-slate-500">Reset</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentEditTab === 'BUS' && (
+              <div className="p-8 space-y-6">
+                <div>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Assign Bus</label>
+                   <select 
+                    value={tempBusData.busId} 
+                    onChange={e => setTempBusData({ ...tempBusData, busId: e.target.value })}
+                    className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none focus:ring-2 focus:ring-blue-100 appearance-none"
+                   >
+                     <option value="">Select a Bus</option>
+                     {buses.map(b => <option key={b.id} value={b.id}>{b.numberPlate}</option>)}
+                   </select>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
       <AnimatePresence>
-        {isDriverModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6">
-            <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl space-y-4 border border-slate-100">
-              <div className="flex justify-between items-center"><h3 className="text-xl font-black text-slate-900">{editingDriverId ? 'Edit Driver' : 'Add Driver'}</h3><button onClick={() => setIsDriverModalOpen(false)}><X className="text-slate-400"/></button></div>
-              <div className="space-y-4">
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Full Name</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Name" value={driverForm.name} onChange={e => setDriverForm({...driverForm, name: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Email</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Email" value={driverForm.email} onChange={e => setDriverForm({...driverForm, email: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Password</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Password" type="password" value={driverForm.password || ''} onChange={e => setDriverForm({...driverForm, password: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Phone</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Phone" value={driverForm.phone} onChange={e => setDriverForm({...driverForm, phone: e.target.value})} /></div>
-              </div>
-              <button onClick={handleSaveDriver} className="w-full bg-slate-900 text-white py-5 rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl">Save Driver</button>
-            </div>
-          </motion.div>
-        )}
-        {isStudentModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6 overflow-y-auto">
-            <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl space-y-4 border border-slate-100 my-auto">
-              <div className="flex justify-between items-center"><h3 className="text-xl font-black text-slate-900">{editingStudentId ? 'Edit Student' : 'Add Student'}</h3><button onClick={() => setIsStudentModalOpen(false)}><X className="text-slate-400"/></button></div>
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar pr-2">
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Full Name</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Name" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Branch</label><select className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none appearance-none" value={studentForm.branch} onChange={e => setStudentForm({...studentForm, branch: e.target.value})}><option value="">Select Branch</option>{BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Register Number</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Reg No" value={studentForm.registerNumber} onChange={e => setStudentForm({...studentForm, registerNumber: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Email Address</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Email" value={studentForm.email} onChange={e => setStudentForm({...studentForm, email: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Password</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Password" type="password" value={studentForm.password || ''} onChange={e => setStudentForm({...studentForm, password: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Mobile Number</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="Mobile" value={studentForm.mobileNumber} onChange={e => setStudentForm({...studentForm, mobileNumber: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Assigned Route</label><select className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" value={studentForm.assignedRouteId} onChange={e => setStudentForm({...studentForm, assignedRouteId: e.target.value})}><option value="">Select Route</option>{routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div>
-              </div>
-              <button onClick={handleSaveStudent} className="w-full bg-blue-500 text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100 mt-2">Save Student</button>
-            </div>
-          </motion.div>
-        )}
         {isBusModalOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[150] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6">
-            <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl space-y-4 border border-slate-100">
-              <div className="flex justify-between items-center"><h3 className="text-xl font-black text-slate-900">{editingBusId ? 'Edit Bus' : 'Add Bus'}</h3><button onClick={() => setIsBusModalOpen(false)}><X className="text-slate-400"/></button></div>
+          <div className="fixed inset-0 z-[3000] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl">
+              <h3 className="text-lg font-black text-slate-900 mb-6">{editingBusId ? 'Edit Bus' : 'Add Bus'}</h3>
               <div className="space-y-4">
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Number Plate</label><input className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" placeholder="e.g. KA-01-CB-1234" value={busForm.numberPlate} onChange={e => setBusForm({...busForm, numberPlate: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Assign Driver</label><select className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-slate-900 outline-none" value={busForm.driverId} onChange={e => setBusForm({...busForm, driverId: e.target.value})}><option value="">Select Driver</option>{drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+                <input type="text" placeholder="Number Plate (e.g. KA-01-CB-1234)" value={busForm.numberPlate} onChange={e => setBusForm({...busForm, numberPlate: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <select value={busForm.driverId} onChange={e => setBusForm({...busForm, driverId: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none">
+                  <option value="">Assign Driver</option>
+                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                <div className="flex gap-3 pt-4">
+                  <button onClick={() => setIsBusModalOpen(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl text-[10px] font-black uppercase">Cancel</button>
+                  <button onClick={handleSaveBus} className="flex-1 py-4 bg-yellow-400 text-slate-900 rounded-2xl text-[10px] font-black uppercase">Save</button>
+                </div>
               </div>
-              <button onClick={handleSaveBus} className="w-full bg-yellow-400 text-slate-900 py-5 rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl">Save Bus</button>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
+        )}
+
+        {isDriverModalOpen && (
+          <div className="fixed inset-0 z-[3000] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl overflow-y-auto max-h-[80vh] no-scrollbar">
+              <h3 className="text-lg font-black text-slate-900 mb-6">{editingDriverId ? 'Edit Driver' : 'Add Driver'}</h3>
+              <div className="space-y-4">
+                <input type="text" placeholder="Full Name" value={driverForm.name} onChange={e => setDriverForm({...driverForm, name: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <input type="text" placeholder="Phone Number" value={driverForm.phone} onChange={e => setDriverForm({...driverForm, phone: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <input type="email" placeholder="Email" value={driverForm.email} onChange={e => setDriverForm({...driverForm, email: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <input type="password" placeholder="Password" value={driverForm.password} onChange={e => setDriverForm({...driverForm, password: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <div className="flex gap-3 pt-4">
+                  <button onClick={() => setIsDriverModalOpen(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl text-[10px] font-black uppercase">Cancel</button>
+                  <button onClick={handleSaveDriver} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase">Save</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isStudentModalOpen && (
+          <div className="fixed inset-0 z-[3000] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh] no-scrollbar">
+              <h3 className="text-lg font-black text-slate-900 mb-6">{editingStudentId ? 'Edit Student' : 'Add Student'}</h3>
+              <div className="space-y-4">
+                <input type="text" placeholder="Full Name" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <input type="text" placeholder="Register Number" value={studentForm.registerNumber} onChange={e => setStudentForm({...studentForm, registerNumber: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <select value={studentForm.branch} onChange={e => setStudentForm({...studentForm, branch: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none">
+                  <option value="">Select Branch</option>
+                  {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <input type="text" placeholder="Mobile Number" value={studentForm.mobileNumber} onChange={e => setStudentForm({...studentForm, mobileNumber: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <input type="email" placeholder="Email" value={studentForm.email} onChange={e => setStudentForm({...studentForm, email: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <input type="password" placeholder="Password" value={studentForm.password} onChange={e => setStudentForm({...studentForm, password: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none" />
+                <select value={studentForm.assignedRouteId} onChange={e => setStudentForm({...studentForm, assignedRouteId: e.target.value})} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold border-none">
+                  <option value="">Assign Route</option>
+                  {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+                <div className="flex gap-3 pt-4">
+                  <button onClick={() => setIsStudentModalOpen(false)} className="flex-1 py-4 bg-slate-100 rounded-2xl text-[10px] font-black uppercase">Cancel</button>
+                  <button onClick={handleSaveStudent} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase">Save</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

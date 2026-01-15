@@ -1,3 +1,5 @@
+
+
 import React, { useRef, Suspense, ReactNode, Component } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Float, Environment } from '@react-three/drei';
@@ -56,25 +58,27 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
+// Fix: Use React.Component explicitly and ensure the props and state types are correctly handled to satisfy the TypeScript compiler.
+class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = { hasError: false };
 
-  static getDerivedStateFromError() {
+  public static getDerivedStateFromError(_: any): ErrorBoundaryState {
     return { hasError: true };
   }
 
-  componentDidCatch(error: any) {
+  public componentDidCatch(error: any) {
     console.error("3D Model Error:", error);
   }
 
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
+  public render() {
+    // Destructuring props and state to ensure the compiler recognizes them from the React.Component base class
+    const { hasError } = this.state;
+    const { fallback, children } = this.props;
+
+    if (hasError) {
+      return fallback;
     }
-    return this.props.children;
+    return children;
   }
 }
 
