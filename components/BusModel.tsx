@@ -57,13 +57,9 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-// Fix: Explicitly use React.Component with generics to resolve state and props property access errors.
-class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    // Initialize state properly within the constructor
-    this.state = { hasError: false };
-  }
+// Fix: Explicitly extend Component from 'react' and use class property for state initialization to resolve property access errors.
+class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(_: any): ErrorBoundaryState {
     return { hasError: true };
@@ -74,7 +70,7 @@ class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBounda
   }
 
   render() {
-    // Access state and props via 'this' which are now correctly typed through the React.Component generic.
+    // Access state and props via 'this', now correctly inferred by extending Component.
     if (this.state.hasError) {
       return this.props.fallback;
     }
