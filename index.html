@@ -4,9 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CollegeBus Tracker</title>
+    <!-- Tailwind and CSS should load first to prevent unstyled flash -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+    
+    <!-- Security and Frame handling -->
     <script>
       (function() {
         const block = () => {
@@ -61,6 +64,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- Vite handles the module bundling; no importmap required -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
