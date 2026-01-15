@@ -1,0 +1,29 @@
+{
+  "name": "collegebus-tracker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "lucide-react": "0.460.0",
+    "recharts": "2.13.0",
+    "framer-motion": "11.11.11",
+    "maplibre-gl": "4.7.1",
+    "three": "0.170.0",
+    "@react-three/fiber": "8.17.10",
+    "@react-three/drei": "9.117.3",
+    "@google/genai": "1.35.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
