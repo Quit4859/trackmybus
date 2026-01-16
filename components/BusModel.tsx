@@ -57,9 +57,12 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-// Fix: Explicitly extend Component from 'react' and use class property for state initialization to resolve property access errors.
-class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false };
+// Fix: Explicitly extend React.Component and initialize state in a constructor to resolve "Property 'props' does not exist" errors in TypeScript.
+class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
   static getDerivedStateFromError(_: any): ErrorBoundaryState {
     return { hasError: true };
@@ -70,7 +73,7 @@ class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
   }
 
   render() {
-    // Access state and props via 'this', now correctly inferred by extending Component.
+    // Access state and props via 'this' which is now correctly inferred by extending React.Component.
     if (this.state.hasError) {
       return this.props.fallback;
     }
