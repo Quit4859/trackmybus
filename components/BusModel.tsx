@@ -1,4 +1,4 @@
-import React, { useRef, Suspense, ReactNode } from 'react';
+import React, { useRef, Suspense, ReactNode, Component } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -56,8 +56,7 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-// Fix: Use React.Component and constructor to ensure props/state are typed correctly
-class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };

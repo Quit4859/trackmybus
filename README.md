@@ -37,13 +37,13 @@ graph TD
 
     %% Telemetry Flow
     Driver -->|Device Orientation & Lat/Lng| GPS
-    GPS -->|Throttled Updates (50ms)| State
+    GPS -->|Throttled Updates 50ms| State
     State -->|Broadcast Position| Student
     State -->|Broadcast Position| Admin
 
     %% AI Flow
     Student -->|Natural Language Query| Gemini
-    Student -->|Image Upload (Vision)| Gemini
+    Student -->|Image Upload - Vision| Gemini
     Gemini -->|Contextual Response| Student
 
     %% Mapping Flow
