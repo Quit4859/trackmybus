@@ -1,5 +1,4 @@
-
-import React, { useRef, Suspense, ReactNode, Component } from 'react';
+import React, { useRef, Suspense, ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -57,7 +56,7 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-// Fix: Explicitly extend React.Component and initialize state in a constructor to resolve "Property 'props' does not exist" errors in TypeScript.
+// Fix: Use React.Component and constructor to ensure props/state are typed correctly
 class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -73,7 +72,6 @@ class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBounda
   }
 
   render() {
-    // Access state and props via 'this' which is now correctly inferred by extending React.Component.
     if (this.state.hasError) {
       return this.props.fallback;
     }
