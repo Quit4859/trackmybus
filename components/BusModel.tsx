@@ -1,4 +1,5 @@
-import React, { useRef, Suspense, ReactNode, Component } from 'react';
+
+import React, { useRef, Suspense, ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Float, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -56,7 +57,8 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fixed ModelErrorBoundary: Explicitly extend React.Component with generics to resolve state/props access errors
+class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
@@ -71,6 +73,7 @@ class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
   }
 
   render() {
+    // Properly access state and props properties from the base React.Component class
     if (this.state.hasError) {
       return this.props.fallback;
     }
