@@ -1,13 +1,16 @@
 # 🚍 CollegeBus Tracker
+
 ### *Stop wondering. Start tracking.*
 
 ![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react)
 ![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite)
 ![Gemini AI](https://img.shields.io/badge/Gemini_AI-3.0-4285F4?style=for-the-badge&logo=googlegemini)
 ![Three.js](https://img.shields.io/badge/Three.js-R170-000000?style=for-the-badge&logo=threedotjs)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwindcss)
 
-> **Are you tired of standing at the bus stop wondering where the bus is?**
-> We eliminate "Last-Mile Uncertainty" with real-time telemetry, 3D visualization, and multimodal AI.
+> **"Are you tired of standing at the bus stop wondering where the bus is?"**
+>
+> CollegeBus Tracker eliminates "Last-Mile Uncertainty" for students and admins through real-time telemetry, 3D spatial visualization, and multimodal AI assistance.
 
 ---
 
@@ -77,33 +80,59 @@ graph LR
 
 ## 🚀 Key Features
 
-| Feature | Tech | Benefit |
+| Feature | Tech Stack | Description |
 | :--- | :--- | :--- |
-| **Live Tracking** | `Geolocation` + `Lerp` | Smooth 20fps bus movement & heading sync. |
-| **AI Assistant** | `Gemini 3.0 Flash` | 24/7 support for schedules & lost item detection. |
-| **3D Maps** | `MapLibre` + `R3F` | High-fidelity 3D buildings & vehicle visualization. |
-| **Smart Pathing** | `OSRM API` | Precise road-snapped routing for accurate ETAs. |
+| **Live Telemetry** | `Geolocation API` + `Lerp` | Real-time bus location updates with smooth 20fps interpolation and heading synchronization. |
+| **AI Copilot** | `Gemini 3.0 Flash` | Context-aware chatbot for schedules, routes, and safety inquiries. |
+| **Visual Intelligence** | `Gemini Vision` | "Scan & Check" feature to analyze lost items, printed notices, or maintenance issues. |
+| **3D Spatial Map** | `MapLibre` + `Three.js` | Immersive map experience with 3D buildings and realistic bus models. |
+| **Role-Based Access** | `React Router` + `State` | Dedicated interfaces for Students (Tracking), Drivers (Broadcasting), and Admins (Fleet Mgmt). |
+
+---
+
+## 🔐 Demo Access
+
+Explore the platform using these pre-configured accounts:
+
+| Role | Email | Password | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **Admin** | `admin@gmail.com` | `admin` | Manage routes, buses, drivers, students; View fleet overview. |
+| **Driver** | `driver@gmail.com` | `123123` | Broadcast live location; View assigned route; Safety dashboard. |
+| **Student** | `student@gmail.com` | `123123` | Track buses; AI Chat; Visual Search; View Schedules. |
+
+---
+
+## 🛠️ Installation & Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/college-bus-tracker.git
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment**
+   Create a `.env` file and add your Gemini API key:
+   ```env
+   VITE_API_KEY=your_google_genai_api_key
+   ```
+
+4. **Run the development server**
+   ```bash
+   npm run dev
+   ```
 
 ---
 
 ## ⚡ Technical Highlights
 
-*   **Multimodal AI**: Vision-based analysis for campus maintenance and lost/found reports.
-*   **Driver Compass**: Heading-up mode using device orientation and Three.js interpolation.
-*   **Resilient GPS**: Auto-reconnect and signal filtering for high-motion accuracy in transit.
-*   **Performance PWA**: Vendor-split bundles for hardware-accelerated mapping and 3D rendering.
+*   **Multimodal AI Integration**: Leverages Google's Gemini 3.0 for both text-based assistance and image analysis (Zero-shot vision tasks).
+*   **Driver Compass**: Implements device orientation API to provide "Heading-Up" navigation mode for drivers.
+*   **Resilient State Management**: Custom `usePersistedState` implementation to maintain fleet data across reloads without a backend.
+*   **Performance Optimization**: Vendor chunk splitting for heavy 3D/Map libraries to ensure fast First Contentful Paint (FCP).
 
 ---
-
-## 📂 Project Anatomy
-
-```bash
-src/
-├── components/      # 🧩 3D Models, Maps, AI Chat, Dashboards
-├── services/        # 🔌 Gemini SDK & Routing Logic
-├── App.tsx          # 🚦 Global State & Security Router
-└── types.ts         # 📐 Interface Definitions
-```
-
----
-*Enterprise Reliability • Spatial Precision • Intelligent Logistics*
+*Built with ❤️ for Campus Commuters*
