@@ -1,5 +1,3 @@
-
-
 import React, { Component, useRef, Suspense, ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF, Float, Environment } from '@react-three/drei';
@@ -58,14 +56,9 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-// Fixed ModelErrorBoundary: Explicitly extend Component with generics and declare state property
-// to ensure TypeScript properly recognizes state and props members.
-class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = { hasError: false };
-
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-  }
+// Fixed ModelErrorBoundary: Using React.Component explicitly to ensure type inference works correctly
+class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(_: any): ErrorBoundaryState {
     return { hasError: true };
@@ -76,7 +69,6 @@ class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
   }
 
   render() {
-    // Accessing this.state and this.props which are now clearly defined via inheritance from Component
     if (this.state.hasError) {
       return this.props.fallback;
     }

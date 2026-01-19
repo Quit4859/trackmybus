@@ -1,12 +1,13 @@
 # 🚍 CollegeBus Tracker
-### The Future of Campus Commuting
+### *Stop wondering. Start tracking.*
 
 ![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react)
 ![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite)
 ![Gemini AI](https://img.shields.io/badge/Gemini_AI-3.0-4285F4?style=for-the-badge&logo=googlegemini)
 ![Three.js](https://img.shields.io/badge/Three.js-R170-000000?style=for-the-badge&logo=threedotjs)
 
-**CollegeBus Tracker** eliminates the "Last-Mile Uncertainty" for students and admins through real-time telemetry, 3D spatial visualization, and multimodal AI assistance.
+> **Are you tired of standing at the bus stop wondering where the bus is?**
+> We eliminate "Last-Mile Uncertainty" with real-time telemetry, 3D visualization, and multimodal AI.
 
 ---
 
