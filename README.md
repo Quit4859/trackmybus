@@ -8,7 +8,7 @@
 ![Three.js](https://img.shields.io/badge/Three.js-R170-000000?style=for-the-badge&logo=threedotjs)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwindcss)
 
-> **"Are you tired of standing at the bus stop wondering where the bus is?"**
+> **"Areyou tired of standing at the bus stop wondering where the bus is?"**
 >
 > College BusTracker eliminates "Last-Mile Uncertainty" for students and admins through real-time telemetry, 3D spatial visualization, and multimodal AI assistance.
 
