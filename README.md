@@ -1,4 +1,4 @@
-qq# 🚍 CollegeBus Tracker
+q# 🚍 CollegeBus Tracker
 
 ### *Stop wondering. Start tracking.*
 
