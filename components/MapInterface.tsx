@@ -41,9 +41,14 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       ? (isValidCoord(route.actualLat, route.actualLng) ? [route.actualLng!, route.actualLat!] : DEFAULT_LNG_LAT)
       : (isValidCoord(route.liveLat, route.liveLng) ? [route.liveLng!, route.liveLat!] : DEFAULT_LNG_LAT);
 
-  const EXPANDED_Y = 20;
-  const COLLAPSED_Y = userRole === 'driver' ? 620 : 420;
-  const MINIMIZED_Y = 740;
+  // Dynamic Snap Points based on Screen Height
+  const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  
+  const EXPANDED_Y = 0; // Snap to very top
+  // Collapsed: Roughly in the middle-bottom
+  const COLLAPSED_Y = userRole === 'driver' ? screenHeight - 200 : screenHeight - 380;
+  // Minimized: Just a small handle visible above the 80px BottomNav
+  const MINIMIZED_Y = screenHeight - 110; 
 
   // Track the current snap position to correctly calculate drag offsets
   const [snapPoint, setSnapPoint] = useState(COLLAPSED_Y);
@@ -304,21 +309,35 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     const currentY = snapPoint + offset.y;
     let nearest = snapPoint;
 
+    // Threshold for snapping to the next state (pixel distance)
+    const SNAP_THRESHOLD = 120;
+
     // 1. High Velocity Swipes (Flicks)
-    if (velocity.y > 500) {
-      // Swiping Down
-      if (snapPoint === EXPANDED_Y) nearest = COLLAPSED_Y;
-      else nearest = MINIMIZED_Y;
-    } else if (velocity.y < -500) {
-      // Swiping Up
-      if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
-      else nearest = EXPANDED_Y;
+    if (Math.abs(velocity.y) > 400) {
+      if (velocity.y > 0) {
+        // Swipe Down
+        if (snapPoint === EXPANDED_Y) nearest = COLLAPSED_Y;
+        else nearest = MINIMIZED_Y;
+      } else {
+        // Swipe Up
+        if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
+        else nearest = EXPANDED_Y;
+      }
     } else {
       // 2. Positional Snap (Slow Drag)
-      const points = [EXPANDED_Y, COLLAPSED_Y, MINIMIZED_Y];
-      nearest = points.reduce((prev, curr) => 
-        Math.abs(currentY - curr) < Math.abs(currentY - prev) ? curr : prev
-      );
+      if (snapPoint === EXPANDED_Y) {
+         // If at Top, need to drag down significantly to collapse
+         if (offset.y > SNAP_THRESHOLD) nearest = COLLAPSED_Y;
+         else nearest = EXPANDED_Y;
+      } else if (snapPoint === COLLAPSED_Y) {
+         if (offset.y < -SNAP_THRESHOLD) nearest = EXPANDED_Y;
+         else if (offset.y > SNAP_THRESHOLD) nearest = MINIMIZED_Y;
+         else nearest = COLLAPSED_Y;
+      } else {
+         // Minimized
+         if (offset.y < -SNAP_THRESHOLD) nearest = COLLAPSED_Y;
+         else nearest = MINIMIZED_Y;
+      }
     }
     
     setSnapPoint(nearest);
@@ -363,7 +382,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       <div className="flex-1 w-full relative z-0">
         <div ref={containerRef} className="absolute inset-0" />
         {!isLoading && (
-          <div className="absolute bottom-[340px] right-6 z-[900] flex flex-col gap-3">
+          <div className="absolute bottom-[340px] right-6 z-[20] flex flex-col gap-3">
             {userRole === 'driver' && (
               <button 
                 onClick={toggleHeadingMode} 
@@ -383,7 +402,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       </div>
 
       {userRole === 'driver' && !isLoading && (
-        <div className="absolute bottom-24 left-0 right-0 z-[1002] px-4">
+        <div className="absolute bottom-24 left-0 right-0 z-[40] px-4">
            <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-slate-900/95 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-2xl border border-white/10 flex flex-col gap-5">
               <div className="flex items-center gap-4 px-1">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${route.isLive ? 'bg-green-500/20' : 'bg-white/5'}`}>
@@ -408,12 +427,13 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       {userRole !== 'driver' && (
         <motion.div 
           drag="y" 
-          dragConstraints={{ top: EXPANDED_Y, bottom: MINIMIZED_Y }} 
-          dragElastic={0.1} 
+          dragConstraints={{ top: 0, bottom: screenHeight }} 
+          dragElastic={0.2} 
+          dragMomentum={false}
           animate={controls} 
           initial={{ y: COLLAPSED_Y }} 
           onDragEnd={handleDragEnd} 
-          className="fixed inset-x-0 bottom-0 z-[1001] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden"
+          className="fixed inset-x-0 bottom-0 z-[1200] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden"
         >
           <div className="w-full pt-4 pb-8 cursor-grab active:cursor-grabbing">
             <div className="w-16 h-1.5 bg-slate-200 rounded-full mx-auto"></div>
