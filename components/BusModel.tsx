@@ -56,7 +56,7 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-class ModelErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ModelErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };

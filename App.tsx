@@ -313,7 +313,7 @@ const App: React.FC = () => {
                 <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-20 left-4 right-4 z-[3000]">
                   <div className="bg-white p-5 rounded-3xl shadow-2xl border border-red-50 flex items-center gap-4">
                     <RefreshCw className="w-5 h-5 text-red-500 cursor-pointer hover:rotate-180 transition-transform duration-500" onClick={handleReloadGps} />
-                    <div className="flex-1 text-sm font-bold">{gpsError.message}</div>
+                    <div className="flex-1 text-sm font-bold text-slate-900">{gpsError.message}</div>
                   </div>
                 </motion.div>
               )}
