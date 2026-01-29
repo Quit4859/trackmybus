@@ -49,6 +49,8 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   const COLLAPSED_Y = userRole === 'driver' ? screenHeight - 200 : screenHeight - 380;
   // Minimized: Just a small handle visible above the 80px BottomNav
   const MINIMIZED_Y = screenHeight - 110; 
+  // Hidden: Completely off-screen
+  const HIDDEN_Y = screenHeight;
 
   // Track the current snap position to correctly calculate drag offsets
   const [snapPoint, setSnapPoint] = useState(COLLAPSED_Y);
@@ -317,10 +319,12 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       if (velocity.y > 0) {
         // Swipe Down
         if (snapPoint === EXPANDED_Y) nearest = COLLAPSED_Y;
-        else nearest = MINIMIZED_Y;
+        else if (snapPoint === COLLAPSED_Y) nearest = MINIMIZED_Y;
+        else nearest = HIDDEN_Y;
       } else {
         // Swipe Up
-        if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
+        if (snapPoint === HIDDEN_Y) nearest = MINIMIZED_Y;
+        else if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
         else nearest = EXPANDED_Y;
       }
     } else {
@@ -333,9 +337,10 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
          if (offset.y < -SNAP_THRESHOLD) nearest = EXPANDED_Y;
          else if (offset.y > SNAP_THRESHOLD) nearest = MINIMIZED_Y;
          else nearest = COLLAPSED_Y;
-      } else {
+      } else if (snapPoint === MINIMIZED_Y) {
          // Minimized
-         if (offset.y < -SNAP_THRESHOLD) nearest = COLLAPSED_Y;
+         if (offset.y > 80) nearest = HIDDEN_Y;
+         else if (offset.y < -SNAP_THRESHOLD) nearest = COLLAPSED_Y;
          else nearest = MINIMIZED_Y;
       }
     }
@@ -425,56 +430,75 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       )}
 
       {userRole !== 'driver' && (
-        <motion.div 
-          drag="y" 
-          dragConstraints={{ top: 0, bottom: screenHeight }} 
-          dragElastic={0.2} 
-          dragMomentum={false}
-          animate={controls} 
-          initial={{ y: COLLAPSED_Y }} 
-          onDragEnd={handleDragEnd} 
-          className="fixed inset-x-0 bottom-0 z-[1200] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden"
-        >
-          <div className="w-full pt-4 pb-8 cursor-grab active:cursor-grabbing">
-            <div className="w-16 h-1.5 bg-slate-200 rounded-full mx-auto"></div>
-          </div>
-          <div className="px-8 pb-32 flex-1 overflow-y-auto no-scrollbar">
-            <div className="flex justify-between items-end mb-8">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                    <Clock className="w-4 h-4 text-yellow-500" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Est. Arrival</span>
+        <>
+            <motion.div 
+            drag="y" 
+            dragConstraints={{ top: 0, bottom: screenHeight }} 
+            dragElastic={0.2} 
+            dragMomentum={false}
+            animate={controls} 
+            initial={{ y: COLLAPSED_Y }} 
+            onDragEnd={handleDragEnd} 
+            className="fixed inset-x-0 bottom-0 z-[1200] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden"
+            >
+            <div className="w-full pt-4 pb-8 cursor-grab active:cursor-grabbing">
+                <div className="w-16 h-1.5 bg-slate-200 rounded-full mx-auto"></div>
+            </div>
+            <div className="px-8 pb-32 flex-1 overflow-y-auto no-scrollbar">
+                <div className="flex justify-between items-end mb-8">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <Clock className="w-4 h-4 text-yellow-500" />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Est. Arrival</span>
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-900">{route.isLive ? route.eta : 'Offline'}</h1>
                 </div>
-                <h1 className="text-4xl font-black text-slate-900">{route.isLive ? route.eta : 'Offline'}</h1>
-              </div>
-            </div>
-            <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-8">
-              <div className="flex items-center gap-4">
-                 <UserCircle className="w-12 h-12 text-slate-400" />
-                 <div>
-                   <p className="font-extrabold text-slate-900 text-base">{route.driver}</p>
-                   <span className="text-xs font-bold text-slate-400">{route.numberPlate}</span>
-                 </div>
-              </div>
-              <a href={`tel:${route.driverPhone}`} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-600 shadow-sm active:bg-slate-50">
-                <Phone className="w-5 h-5" />
-              </a>
-            </div>
-            <div className="space-y-6">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Route Schedule</h3>
-                <div className="relative pl-6 space-y-8">
-                    <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                    {route.stops.slice(activeIndex, activeIndex + 3).map((stop) => (
-                        <div key={stop.id} className="relative flex items-center justify-between">
-                            <div className={`absolute -left-[23px] w-4 h-4 rounded-full border-4 border-white shadow-sm ${stop.status === 'current' ? 'bg-yellow-400 ring-8 ring-yellow-400/10' : 'bg-slate-200'}`} />
-                            <span className={`text-sm font-bold ${stop.status === 'current' ? 'text-slate-900' : 'text-slate-400'}`}>{stop.name}</span>
-                            <span className="text-xs font-black text-slate-300 font-mono">{stop.time}</span>
-                        </div>
-                    ))}
+                </div>
+                <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-8">
+                <div className="flex items-center gap-4">
+                    <UserCircle className="w-12 h-12 text-slate-400" />
+                    <div>
+                    <p className="font-extrabold text-slate-900 text-base">{route.driver}</p>
+                    <span className="text-xs font-bold text-slate-400">{route.numberPlate}</span>
+                    </div>
+                </div>
+                <a href={`tel:${route.driverPhone}`} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-600 shadow-sm active:bg-slate-50">
+                    <Phone className="w-5 h-5" />
+                </a>
+                </div>
+                <div className="space-y-6">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Route Schedule</h3>
+                    <div className="relative pl-6 space-y-8">
+                        <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                        {route.stops.slice(activeIndex, activeIndex + 3).map((stop) => (
+                            <div key={stop.id} className="relative flex items-center justify-between">
+                                <div className={`absolute -left-[23px] w-4 h-4 rounded-full border-4 border-white shadow-sm ${stop.status === 'current' ? 'bg-yellow-400 ring-8 ring-yellow-400/10' : 'bg-slate-200'}`} />
+                                <span className={`text-sm font-bold ${stop.status === 'current' ? 'text-slate-900' : 'text-slate-400'}`}>{stop.name}</span>
+                                <span className="text-xs font-black text-slate-300 font-mono">{stop.time}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
-          </div>
-        </motion.div>
+            </motion.div>
+
+            <AnimatePresence>
+                {snapPoint === HIDDEN_Y && (
+                    <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        onClick={() => {
+                            setSnapPoint(COLLAPSED_Y);
+                            controls.start({ y: COLLAPSED_Y });
+                        }}
+                        className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[50] bg-slate-900 text-white px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-transform"
+                    >
+                        <Bus className="w-4 h-4" /> View Route
+                    </motion.button>
+                )}
+            </AnimatePresence>
+        </>
       )}
     </div>
   );
