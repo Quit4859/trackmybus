@@ -45,6 +45,9 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   const COLLAPSED_Y = userRole === 'driver' ? 620 : 420;
   const MINIMIZED_Y = 740;
 
+  // Track the current snap position to correctly calculate drag offsets
+  const [snapPoint, setSnapPoint] = useState(COLLAPSED_Y);
+
   const calculateBearing = (start: [number, number], end: [number, number]) => {
     const startLat = (start[1] * Math.PI) / 180;
     const startLng = (start[0] * Math.PI) / 180;
@@ -298,15 +301,28 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     const { offset, velocity } = info;
-    const currentY = COLLAPSED_Y + offset.y;
-    if (velocity.y > 500) controls.start({ y: MINIMIZED_Y });
-    else if (velocity.y < -500) controls.start({ y: EXPANDED_Y });
-    else {
-      const nearest = [EXPANDED_Y, COLLAPSED_Y, MINIMIZED_Y].reduce((prev, curr) => 
+    const currentY = snapPoint + offset.y;
+    let nearest = snapPoint;
+
+    // 1. High Velocity Swipes (Flicks)
+    if (velocity.y > 500) {
+      // Swiping Down
+      if (snapPoint === EXPANDED_Y) nearest = COLLAPSED_Y;
+      else nearest = MINIMIZED_Y;
+    } else if (velocity.y < -500) {
+      // Swiping Up
+      if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
+      else nearest = EXPANDED_Y;
+    } else {
+      // 2. Positional Snap (Slow Drag)
+      const points = [EXPANDED_Y, COLLAPSED_Y, MINIMIZED_Y];
+      nearest = points.reduce((prev, curr) => 
         Math.abs(currentY - curr) < Math.abs(currentY - prev) ? curr : prev
       );
-      controls.start({ y: nearest });
     }
+    
+    setSnapPoint(nearest);
+    controls.start({ y: nearest });
   };
 
   return (
@@ -390,7 +406,15 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       )}
 
       {userRole !== 'driver' && (
-        <motion.div drag="y" dragConstraints={{ top: EXPANDED_Y, bottom: MINIMIZED_Y }} dragElastic={0.1} animate={controls} initial={{ y: COLLAPSED_Y }} onDragEnd={handleDragEnd} className="fixed inset-x-0 bottom-0 z-[1001] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden">
+        <motion.div 
+          drag="y" 
+          dragConstraints={{ top: EXPANDED_Y, bottom: MINIMIZED_Y }} 
+          dragElastic={0.1} 
+          animate={controls} 
+          initial={{ y: COLLAPSED_Y }} 
+          onDragEnd={handleDragEnd} 
+          className="fixed inset-x-0 bottom-0 z-[1001] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden"
+        >
           <div className="w-full pt-4 pb-8 cursor-grab active:cursor-grabbing">
             <div className="w-16 h-1.5 bg-slate-200 rounded-full mx-auto"></div>
           </div>
