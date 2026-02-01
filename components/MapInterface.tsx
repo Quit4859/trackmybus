@@ -347,9 +347,26 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   };
 
   const handleRecenterUser = () => {
-    if (!mapRef.current || !userLocation) return;
-    mapRef.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 18, pitch: 0 });
-    setCenterTarget('user');
+    if (!mapRef.current) return;
+    
+    // Toggle Logic: If locked on User -> Switch to Bus. Otherwise -> Switch to User.
+    if (centerTarget === 'user') {
+        setCenterTarget('bus');
+        if (currentBusPos.current) {
+            mapRef.current.flyTo({ center: currentBusPos.current, zoom: 17.5, pitch: 0 });
+        }
+    } else {
+        if (userLocation) {
+            setCenterTarget('user');
+            mapRef.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 17.5, pitch: 0 });
+        } else {
+            // Fallback if no user location: Go to bus if not already there
+            setCenterTarget('bus');
+            if (currentBusPos.current) {
+                mapRef.current.flyTo({ center: currentBusPos.current, zoom: 17.5, pitch: 0 });
+            }
+        }
+    }
   };
 
   const handleDragEnd = (_: any, info: PanInfo) => {
@@ -449,12 +466,13 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
               </button>
             )}
 
-            {/* Recenter on User Button */}
+            {/* Recenter on User/Bus Toggle */}
             <button 
               onClick={handleRecenterUser} 
               className={`p-4 rounded-2xl shadow-2xl border transition-all active:scale-90 ${centerTarget === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white border-slate-100 text-slate-900'}`}
+              title={centerTarget === 'user' ? "Go to Bus" : "Locate Me"}
             >
-                <Crosshair className="w-6 h-6" />
+                {centerTarget === 'user' ? <Bus className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
             </button>
           </div>
         )}
