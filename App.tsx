@@ -8,6 +8,7 @@ import DriverDashboard from './components/DriverDashboard.tsx';
 import LoginPage from './components/LoginPage.tsx';
 import { User, LogOut, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { connectToRealtime, publishBusUpdate, BusUpdatePayload } from './services/realtimeService.ts';
 
 const INITIAL_DRIVERS: Driver[] = [
   { id: 'D-1', name: 'Rajesh Kumar', phone: '+91 98765 43210', email: 'driver@gmail.com', password: '123123' }
@@ -92,6 +93,32 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bus_drivers', JSON.stringify(drivers)); }, [drivers]);
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
 
+  // Real-time Connection
+  useEffect(() => {
+    const handleRemoteUpdate = (data: BusUpdatePayload) => {
+      // If I am the driver of this route, I trust my local GPS more than the round-trip echo.
+      if (userRole === 'driver' && activeRouteId === data.routeId) return;
+
+      setRoutes(prev => prev.map(r => {
+        if (r.id === data.routeId) {
+          return {
+            ...r,
+            liveLat: data.lat,
+            liveLng: data.lng,
+            actualLat: data.lat, // Sync actual too so Admin sees it
+            actualLng: data.lng,
+            heading: data.heading,
+            isLive: data.isLive
+          };
+        }
+        return r;
+      }));
+    };
+
+    const disconnect = connectToRealtime(handleRemoteUpdate);
+    return () => disconnect();
+  }, [userRole, activeRouteId]);
+
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
       setGpsError({ message: "Geolocation not supported", code: 0 });
@@ -111,7 +138,9 @@ const App: React.FC = () => {
       },
       (error) => {
         let msg = "GPS Signal Weak";
-        if (error.code === error.PERMISSION_DENIED) msg = "Location Access Denied";
+        if (error.code === error.PERMISSION_DENIED) {
+            msg = "Location Access Denied";
+        }
         setGpsError({ message: msg, code: error.code });
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
@@ -147,12 +176,15 @@ const App: React.FC = () => {
     }
   }, [isLoggedIn, userRole]);
 
+  // Driver Location Logic & Broadcasting
   useEffect(() => {
     if (isLoggedIn && userRole === 'driver' && userLocation) {
       const [lat, lng] = userLocation;
+      
+      // Update Local State (Optimistic)
       setRoutes(prev => prev.map(r => {
         if (r.id === activeRouteId) {
-          return { 
+          const updatedRoute = { 
             ...r, 
             actualLat: lat, 
             actualLng: lng,
@@ -160,6 +192,19 @@ const App: React.FC = () => {
             liveLng: r.isLive ? lng : (r.liveLng || lng),
             heading: userHeading
           };
+
+          // Broadcast to MQTT
+          if (r.isLive) {
+            publishBusUpdate({
+              routeId: r.id,
+              lat,
+              lng,
+              heading: userHeading,
+              isLive: true
+            });
+          }
+          
+          return updatedRoute;
         }
         return r;
       }));
@@ -169,7 +214,19 @@ const App: React.FC = () => {
   const activeRoute = routes.find(r => r.id === activeRouteId) || routes[0];
 
   const handleToggleTracking = (status: boolean) => {
+    // Immediate local update
     setRoutes(prev => prev.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r));
+
+    // Broadcast status change immediately (even if stationary)
+    if (userLocation) {
+        publishBusUpdate({
+            routeId: activeRouteId,
+            lat: userLocation[0],
+            lng: userLocation[1],
+            heading: userHeading,
+            isLive: status
+        });
+    }
   };
 
   const handleLogin = (email: string, password?: string): boolean => {
