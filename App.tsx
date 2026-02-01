@@ -211,7 +211,10 @@ const App: React.FC = () => {
         }
         setGpsError({ message: msg, code: error.code });
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      // IMPORTANT: Aggressive GPS settings for driving mode
+      // maximumAge: 0 forces the device to get a fresh position, never cache
+      // timeout: 5000 ensures we don't hang, but keep retry cycle tight
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);

@@ -27,6 +27,11 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   const lastUpdateRef = useRef<number>(0);
   const controls = useAnimation();
 
+  // Animation Refs
+  const currentBusPos = useRef<[number, number] | null>(null);
+  const targetBusPos = useRef<[number, number] | null>(null);
+  const animationFrameRef = useRef<number>(0);
+
   const currentStopIndex = route.stops.findIndex(s => s.status === 'current');
   const activeIndex = currentStopIndex !== -1 ? currentStopIndex : 0;
   
@@ -67,6 +72,11 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
               Math.sin(startLat) * Math.cos(endLat) * Math.cos(endLng - startLng);
     const b = (Math.atan2(y, x) * 180) / Math.PI;
     return (b + 360) % 360;
+  };
+
+  // Linear Interpolation Helper
+  const lerp = (start: number, end: number, factor: number) => {
+    return start + (end - start) * factor;
   };
 
   useEffect(() => {
@@ -126,7 +136,10 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     });
 
     mapRef.current = map;
-    return () => { if (mapRef.current) mapRef.current.remove(); };
+    return () => { 
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        if (mapRef.current) mapRef.current.remove(); 
+    };
   }, []); // Only run once on mount
 
   // Update Route Path when route changes
@@ -161,36 +174,69 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     if (!map || !map.getStyle()) return;
 
     if (isHeadingUp) {
-      map.flyTo({ bearing: bearing, center: busLngLat, pitch: 60, zoom: 19, duration: 1500 });
+      map.flyTo({ bearing: bearing, center: currentBusPos.current || busLngLat, pitch: 60, zoom: 19, duration: 1500 });
     } else {
       map.flyTo({ bearing: 0, pitch: 0, zoom: 17.5, duration: 1500 });
     }
   }, [isHeadingUp]);
 
-  // 2. Handle Continuous Updates (Tracking)
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.getStyle() || !isHeadingUp) return;
-
-    const now = Date.now();
-    if (now - lastUpdateRef.current < 50) return; 
-    lastUpdateRef.current = now;
-
-    map.easeTo({
-      bearing: bearing,
-      center: busLngLat,
-      pitch: 60,
-      zoom: 19,
-      duration: 300, 
-      easing: (t) => t 
-    });
-  }, [bearing, busLngLat, isHeadingUp]);
 
   const toggleHeadingMode = () => {
     setIsHeadingUp(prev => !prev);
   };
 
-  // Update Bus Marker
+  // --- SMOOTH INTERPOLATION LOOP ---
+  // Instead of jumping the marker, we smoothly animate it to the new target
+  useEffect(() => {
+     // Set new target whenever props change
+     targetBusPos.current = busLngLat;
+     if (!currentBusPos.current) {
+        currentBusPos.current = busLngLat;
+     }
+  }, [busLngLat]);
+
+  useEffect(() => {
+     const animate = () => {
+        if (currentBusPos.current && targetBusPos.current && busMarkerRef.current && mapRef.current) {
+            const [curLng, curLat] = currentBusPos.current;
+            const [targetLng, targetLat] = targetBusPos.current;
+
+            // Simple LERP: Move 10% of the way to target per frame
+            // This creates a smooth slide effect even if updates are 1s apart
+            const factor = 0.08; 
+            const newLng = lerp(curLng, targetLng, factor);
+            const newLat = lerp(curLat, targetLat, factor);
+
+            // Check if we are close enough to stop unnecessary calc (optimization)
+            if (Math.abs(newLng - targetLng) > 0.000001 || Math.abs(newLat - targetLat) > 0.000001) {
+                currentBusPos.current = [newLng, newLat];
+                
+                // Update Marker Visuals
+                busMarkerRef.current.setLngLat([newLng, newLat]);
+
+                // Update Camera if tracking bus
+                if (isHeadingUp && centerTarget === 'bus') {
+                     mapRef.current.easeTo({
+                         center: [newLng, newLat],
+                         bearing: bearing,
+                         duration: 0, // Instant update for camera frame
+                         easing: t => t
+                     });
+                }
+            }
+        }
+        animationFrameRef.current = requestAnimationFrame(animate);
+     };
+     
+     animationFrameRef.current = requestAnimationFrame(animate);
+
+     return () => {
+         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+     };
+  }, [isHeadingUp, centerTarget, bearing]);
+
+
+  // Update Bus Marker Creation & Bearing Calculation
   useEffect(() => {
     const map = mapRef.current;
     if (!map || isLoading) return;
@@ -206,7 +252,8 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         }
       } else if (prevCoordsRef.current) {
         const newBearing = calculateBearing(prevCoordsRef.current, busLngLat);
-        if (Math.abs(newBearing - bearing) > 1) {
+        // Only update bearing if moving significantly to avoid jitter
+        if (Math.abs(newBearing - bearing) > 10) {
           currentBearing = newBearing;
           setBearing(newBearing);
         }
@@ -240,14 +287,15 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         busEl.className = 'bus-marker';
         busEl.innerHTML = `<div style="transition: transform 0.3s ease-out; transform: rotate(${currentBearing}deg);">${getRealisticBusContent(route.isLive)}</div>`;
 
+        // Initialize marker at current pos
         busMarkerRef.current = new maplibregl.Marker({ 
           element: busEl,
           anchor: 'center',
           rotationAlignment: 'map',
           pitchAlignment: 'map'
-        }).setLngLat(busLngLat).addTo(map);
+        }).setLngLat(currentBusPos.current || busLngLat).addTo(map);
       } else {
-        busMarkerRef.current.setLngLat(busLngLat);
+        // We only update inner HTML here (rotation/status). Position is handled by animation loop.
         const wrapper = busMarkerRef.current.getElement().firstElementChild as HTMLElement;
         if (wrapper) {
             wrapper.style.transform = `rotate(${currentBearing}deg)`;
@@ -255,7 +303,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         }
       }
     }
-  }, [busLngLat, bearing, isLoading, route.isLive, route.heading]);
+  }, [route.heading, route.isLive, isLoading]); // Removed busLngLat dependency as position is handled by loop
 
   // Update User Marker
   useEffect(() => {
@@ -280,7 +328,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
 
   const handleRecenter = () => {
     if (!mapRef.current) return;
-    const target = centerTarget === 'bus' && userLocation ? [userLocation[1], userLocation[0]] : busLngLat;
+    const target = centerTarget === 'bus' && userLocation ? [userLocation[1], userLocation[0]] : (currentBusPos.current || busLngLat);
     mapRef.current.flyTo({ center: target as [number, number], zoom: 18, pitch: 0, speed: 1.2 });
     setCenterTarget(centerTarget === 'bus' ? 'user' : 'bus');
   };
