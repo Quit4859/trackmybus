@@ -4,11 +4,10 @@ import { BusRoute } from '../types';
 // Public HiveMQ Broker (WebSockets)
 const BROKER_URL = 'wss://broker.hivemq.com:8000/mqtt';
 
-// Topic Architecture
-// 1. Updates: High frequency, contains lat/lng/status
-const TOPIC_UPDATES = 'college-bus-tracker/v2/updates';
-// 2. Config: Low frequency, contains the full JSON of all routes (Admin sync)
-const TOPIC_CONFIG = 'college-bus-tracker/v2/config';
+// Topic Architecture v3 (Granular Topics to prevent collisions)
+const TOPIC_BASE = 'college-bus-tracker/v3';
+const TOPIC_CONFIG = `${TOPIC_BASE}/config`; // Global route config
+const TOPIC_UPDATES_WILDCARD = `${TOPIC_BASE}/updates/+`; // Listen to ALL routes
 
 let client: mqtt.MqttClient | null = null;
 
@@ -28,7 +27,8 @@ export interface ConfigUpdatePayload {
 
 export const connectToRealtime = (
   onBusUpdate: (data: BusUpdatePayload) => void,
-  onConfigUpdate: (data: ConfigUpdatePayload) => void
+  onConfigUpdate: (data: ConfigUpdatePayload) => void,
+  onStatusChange?: (status: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void
 ) => {
   if (client) return () => {};
 
@@ -36,29 +36,41 @@ export const connectToRealtime = (
   const clientId = `cbt-user-${Math.random().toString(16).slice(2, 8)}`;
   
   console.log(`🔌 Connecting to Global Sync Network as ${clientId}...`);
-  
+  if (onStatusChange) onStatusChange('RECONNECTING');
+
   client = mqtt.connect(BROKER_URL, {
     clientId,
-    clean: true, // Clean session ensures we get fresh retained messages on connect
+    clean: true,
     connectTimeout: 4000,
     reconnectPeriod: 2000,
   });
 
   client.on('connect', () => {
     console.log('✅ Connected to Cloud Broker');
+    if (onStatusChange) onStatusChange('CONNECTED');
     
-    // Subscribe to both Location Updates and Route Config
-    client?.subscribe([TOPIC_UPDATES, TOPIC_CONFIG], { qos: 1 }, (err) => {
+    // Subscribe to Wildcard Updates and Config
+    client?.subscribe([TOPIC_UPDATES_WILDCARD, TOPIC_CONFIG], { qos: 1 }, (err) => {
       if (err) console.error('Subscription error:', err);
       else console.log('📡 Listening for global updates...');
     });
+  });
+
+  client.on('reconnect', () => {
+    console.log('Using fallback connection...');
+    if (onStatusChange) onStatusChange('RECONNECTING');
+  });
+
+  client.on('close', () => {
+    if (onStatusChange) onStatusChange('DISCONNECTED');
   });
 
   client.on('message', (topic, message) => {
     try {
       const msgString = message.toString();
       
-      if (topic === TOPIC_UPDATES) {
+      // Check if it's an update topic (contains /updates/)
+      if (topic.includes('/updates/')) {
         const data = JSON.parse(msgString) as BusUpdatePayload;
         onBusUpdate(data);
       } 
@@ -74,6 +86,7 @@ export const connectToRealtime = (
   
   client.on('error', (err) => {
     console.warn('Network warning:', err);
+    if (onStatusChange) onStatusChange('DISCONNECTED');
   });
 
   return () => {
@@ -86,7 +99,8 @@ export const connectToRealtime = (
 
 /**
  * Broadcasts Driver Location.
- * RETAIN: TRUE -> New users joining will immediately see this status.
+ * Uses specific topic: .../updates/{routeId}
+ * This ensures Driver A doesn't overwrite Driver B's retained message.
  */
 export const publishBusUpdate = (data: Omit<BusUpdatePayload, 'timestamp'>) => {
   if (client && client.connected) {
@@ -94,14 +108,14 @@ export const publishBusUpdate = (data: Omit<BusUpdatePayload, 'timestamp'>) => {
       ...data,
       timestamp: Date.now()
     };
-    client.publish(TOPIC_UPDATES, JSON.stringify(payload), { qos: 0, retain: true });
+    // Publish to specific route topic
+    const topic = `${TOPIC_BASE}/updates/${data.routeId}`;
+    client.publish(topic, JSON.stringify(payload), { qos: 0, retain: true });
   }
 };
 
 /**
  * Broadcasts Admin Route Configuration.
- * RETAIN: TRUE -> This acts as a "Cloud Database". 
- * Any device connecting will download this JSON immediately.
  */
 export const publishRouteConfig = (routes: BusRoute[]) => {
   if (client && client.connected) {

@@ -6,7 +6,7 @@ import BottomNav from './components/BottomNav.tsx';
 import AdminDashboard from './components/AdminDashboard.tsx';
 import DriverDashboard from './components/DriverDashboard.tsx';
 import LoginPage from './components/LoginPage.tsx';
-import { User, LogOut, RefreshCw, CloudLightning } from 'lucide-react';
+import { User, LogOut, RefreshCw, CloudLightning, Wifi, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { connectToRealtime, publishBusUpdate, publishRouteConfig, BusUpdatePayload, ConfigUpdatePayload } from './services/realtimeService.ts';
 
@@ -61,6 +61,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('TRACKING');
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'driver'>('student');
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING'>('DISCONNECTED');
   
   // Persistence Loading
   const loadStored = <T,>(key: string, fallback: T): T => {
@@ -80,6 +81,7 @@ const App: React.FC = () => {
   
   const [activeRouteId, setActiveRouteId] = useState<string>(() => {
     const storedRoutes = loadStored('bus_routes', INITIAL_ROUTES);
+    // Try to find the first route
     return storedRoutes.length > 0 ? storedRoutes[0].id : '';
   });
   
@@ -98,7 +100,7 @@ const App: React.FC = () => {
 
   // 1. Handle Location Updates
   const handleBusUpdate = useCallback((data: BusUpdatePayload) => {
-    // If I am the driver of this route, I ignore the echo to prevent jitter
+    // If I am the driver of this specific route, I ignore the echo to prevent jitter
     if (userRole === 'driver' && activeRouteId === data.routeId) return;
 
     setRoutes(prev => prev.map(r => {
@@ -119,33 +121,35 @@ const App: React.FC = () => {
 
   // 2. Handle Data/Config Sync (Receiving Cloud Data)
   const handleConfigUpdate = useCallback((data: ConfigUpdatePayload) => {
-    // Only Student and Driver should be forced to update from cloud to avoid Admin conflicts.
-    // However, if there are multiple admins, this keeps them in sync too.
+    // Admin typically is the Source of Truth, so they ignore updates to prevent reverting their own edits.
+    // However, if you want multiple admins to sync, remove this check.
     if (userRole === 'admin') return; 
 
     console.log("☁️ Applying Cloud Route Configuration...");
     setIsCloudSyncing(true);
     
-    // We merge the cloud data into local state
-    setRoutes(data.routes);
-    
-    // Also save to storage immediately so it persists if they go offline
-    localStorage.setItem('bus_routes', JSON.stringify(data.routes));
+    setRoutes(prevRoutes => {
+       // Merge logic: If the cloud has new routes, take them.
+       // We completely replace the routes array to ensure synchronization
+       return data.routes;
+    });
     
     setTimeout(() => setIsCloudSyncing(false), 2000);
   }, [userRole]);
 
   // 3. Connect to Network
   useEffect(() => {
-    const disconnect = connectToRealtime(handleBusUpdate, handleConfigUpdate);
+    const disconnect = connectToRealtime(
+      handleBusUpdate, 
+      handleConfigUpdate,
+      (status) => setConnectionStatus(status)
+    );
     return () => disconnect();
   }, [handleBusUpdate, handleConfigUpdate]);
 
   // 4. Admin Broadcasting (Sending Cloud Data)
-  // Whenever Admin changes routes, we push to cloud
   const handleAdminRouteUpdate = (newRoutes: BusRoute[]) => {
     setRoutes(newRoutes);
-    // Debounced broadcast could be better, but direct is fine for this scale
     publishRouteConfig(newRoutes);
   };
 
@@ -183,24 +187,19 @@ const App: React.FC = () => {
     return cleanup;
   }, [startTracking, retryCount]);
 
-  // Capture Device Orientation (Compass) for Heading
   useEffect(() => {
     if (isLoggedIn && userRole === 'driver') {
       const handleOrientation = (event: DeviceOrientationEvent) => {
         let heading: number | null = null;
         if ((event as any).webkitCompassHeading) {
-          // iOS
           heading = (event as any).webkitCompassHeading;
         } else if (event.alpha !== null) {
-          // Android / Standard (approximate)
           heading = 360 - event.alpha;
         }
-        
         if (heading !== null) {
           setUserHeading(heading);
         }
       };
-
       window.addEventListener('deviceorientation', handleOrientation);
       return () => window.removeEventListener('deviceorientation', handleOrientation);
     }
@@ -211,19 +210,10 @@ const App: React.FC = () => {
     if (isLoggedIn && userRole === 'driver' && userLocation) {
       const [lat, lng] = userLocation;
       
-      // Update Local State (Optimistic)
       setRoutes(prev => prev.map(r => {
         if (r.id === activeRouteId) {
-          const updatedRoute = { 
-            ...r, 
-            actualLat: lat, 
-            actualLng: lng,
-            liveLat: r.isLive ? lat : (r.liveLat || lat), 
-            liveLng: r.isLive ? lng : (r.liveLng || lng),
-            heading: userHeading
-          };
-
-          // Broadcast to MQTT
+          // If we are live, we update the live coords locally AND broadcast
+          // If not live, we only update 'actual' (hidden) coords
           if (r.isLive) {
             publishBusUpdate({
               routeId: r.id,
@@ -234,7 +224,14 @@ const App: React.FC = () => {
             });
           }
           
-          return updatedRoute;
+          return { 
+            ...r, 
+            actualLat: lat, 
+            actualLng: lng,
+            liveLat: r.isLive ? lat : (r.liveLat || lat), 
+            liveLng: r.isLive ? lng : (r.liveLng || lng),
+            heading: userHeading
+          };
         }
         return r;
       }));
@@ -244,11 +241,8 @@ const App: React.FC = () => {
   const activeRoute = routes.find(r => r.id === activeRouteId) || routes[0];
 
   const handleToggleTracking = (status: boolean) => {
-    // Immediate local update
     setRoutes(prev => prev.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r));
 
-    // Broadcast status change immediately (even if stationary)
-    // This will be RETAINED by the broker, so new users see "Live" immediately
     if (userLocation) {
         publishBusUpdate({
             routeId: activeRouteId,
@@ -264,7 +258,6 @@ const App: React.FC = () => {
     const normEmail = email.toLowerCase().trim();
     const normPass = password?.trim() || '';
 
-    // 1. Admin Check (Allow 'admin' or '123123')
     if (normEmail === 'admin@gmail.com' && (normPass === 'admin' || normPass === '123123')) {
       setUserRole('admin');
       setCurrentView('ADMIN');
@@ -273,7 +266,6 @@ const App: React.FC = () => {
       return true;
     }
 
-    // 2. Driver Check
     const foundDriver = drivers.find(d => 
       d.email.toLowerCase().trim() === normEmail && 
       (d.password || '') === normPass
@@ -290,7 +282,6 @@ const App: React.FC = () => {
       return true;
     }
 
-    // 3. Student Check
     const foundStudent = students.find(s => 
       s.email.toLowerCase().trim() === normEmail && 
       (s.password || '') === normPass
@@ -389,11 +380,26 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50 overflow-hidden font-inter">
+      {/* Network Status Indicator */}
+      <div className={`absolute top-0 left-0 right-0 h-1 z-[5000] ${connectionStatus === 'CONNECTED' ? 'bg-green-500' : connectionStatus === 'RECONNECTING' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+      
       {!isLoggedIn ? (
         <LoginPage onLogin={handleLogin} />
       ) : (
         <>
           <main className="flex-1 relative overflow-hidden">
+             {/* Connection Status Toast */}
+             <AnimatePresence>
+              {connectionStatus !== 'CONNECTED' && (
+                 <motion.div initial={{ y: -50 }} animate={{ y: 0 }} exit={{ y: -50 }} className="absolute top-4 left-0 right-0 flex justify-center z-[4000]">
+                    <div className="bg-slate-900/90 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg">
+                       {connectionStatus === 'DISCONNECTED' ? <WifiOff className="w-3 h-3 text-red-400" /> : <Wifi className="w-3 h-3 text-yellow-400 animate-pulse" />}
+                       {connectionStatus === 'DISCONNECTED' ? 'Offline - Trying to connect...' : 'Connecting to Server...'}
+                    </div>
+                 </motion.div>
+              )}
+             </AnimatePresence>
+
             <AnimatePresence>
               {gpsError && (
                 <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-20 left-4 right-4 z-[3000]">
