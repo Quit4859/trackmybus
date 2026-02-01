@@ -1,10 +1,11 @@
 import mqtt from 'mqtt';
 import { BusRoute } from '../types';
 
-// Public HiveMQ Broker (WebSockets)
-const BROKER_URL = 'wss://broker.hivemq.com:8000/mqtt';
+// Public EMQX Broker (More stable on mobile networks/4G than HiveMQ)
+// Port 8084 is WSS (Secure WebSocket)
+const BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
 
-// Topic Architecture v3 (Granular Topics to prevent collisions)
+// Topic Architecture v3
 const TOPIC_BASE = 'college-bus-tracker/v3';
 const TOPIC_CONFIG = `${TOPIC_BASE}/config`; // Global route config
 const TOPIC_UPDATES_WILDCARD = `${TOPIC_BASE}/updates/+`; // Listen to ALL routes
@@ -30,23 +31,28 @@ export const connectToRealtime = (
   onConfigUpdate: (data: ConfigUpdatePayload) => void,
   onStatusChange?: (status: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void
 ) => {
-  if (client) return () => {};
+  // If already connected, do not create a new client
+  if (client) {
+    if (client.connected && onStatusChange) onStatusChange('CONNECTED');
+    return () => {};
+  }
 
   // Random ID to prevent session collisions
   const clientId = `cbt-user-${Math.random().toString(16).slice(2, 8)}`;
   
-  console.log(`🔌 Connecting to Global Sync Network as ${clientId}...`);
+  console.log(`🔌 Connecting to EMQX Cloud Broker as ${clientId}...`);
   if (onStatusChange) onStatusChange('RECONNECTING');
 
   client = mqtt.connect(BROKER_URL, {
     clientId,
     clean: true,
-    connectTimeout: 4000,
-    reconnectPeriod: 2000,
+    connectTimeout: 10000, // Increased to 10s for mobile networks
+    reconnectPeriod: 3000, // Retry every 3s
+    keepalive: 60,
   });
 
   client.on('connect', () => {
-    console.log('✅ Connected to Cloud Broker');
+    console.log('✅ Connected to EMQX Cloud Broker');
     if (onStatusChange) onStatusChange('CONNECTED');
     
     // Subscribe to Wildcard Updates and Config
@@ -62,7 +68,10 @@ export const connectToRealtime = (
   });
 
   client.on('close', () => {
-    if (onStatusChange) onStatusChange('DISCONNECTED');
+    // Only report disconnected if we didn't manually end it
+    if (client) {
+        if (onStatusChange) onStatusChange('DISCONNECTED');
+    }
   });
 
   client.on('message', (topic, message) => {
@@ -91,6 +100,10 @@ export const connectToRealtime = (
 
   return () => {
     if (client) {
+      // We don't necessarily want to kill the connection on unmount if we want persistence,
+      // but for clean React effects, we end it.
+      // To keep it alive across views, we could move client outside this function scope entirely
+      // but current implementation requires cleanup.
       client.end();
       client = null;
     }
@@ -99,8 +112,6 @@ export const connectToRealtime = (
 
 /**
  * Broadcasts Driver Location.
- * Uses specific topic: .../updates/{routeId}
- * This ensures Driver A doesn't overwrite Driver B's retained message.
  */
 export const publishBusUpdate = (data: Omit<BusUpdatePayload, 'timestamp'>) => {
   if (client && client.connected) {

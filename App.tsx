@@ -96,9 +96,9 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bus_drivers', JSON.stringify(drivers)); }, [drivers]);
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
 
-  // --- Real-time Logic ---
+  // --- Real-time Logic (Stabilized) ---
 
-  // 1. Handle Location Updates
+  // 1. Define handlers (these change frequently)
   const handleBusUpdate = useCallback((data: BusUpdatePayload) => {
     // If I am the driver of this specific route, I ignore the echo to prevent jitter
     if (userRole === 'driver' && activeRouteId === data.routeId) return;
@@ -119,33 +119,42 @@ const App: React.FC = () => {
     }));
   }, [userRole, activeRouteId]);
 
-  // 2. Handle Data/Config Sync (Receiving Cloud Data)
   const handleConfigUpdate = useCallback((data: ConfigUpdatePayload) => {
     // Admin typically is the Source of Truth, so they ignore updates to prevent reverting their own edits.
-    // However, if you want multiple admins to sync, remove this check.
     if (userRole === 'admin') return; 
 
     console.log("☁️ Applying Cloud Route Configuration...");
     setIsCloudSyncing(true);
     
     setRoutes(prevRoutes => {
-       // Merge logic: If the cloud has new routes, take them.
-       // We completely replace the routes array to ensure synchronization
        return data.routes;
     });
     
     setTimeout(() => setIsCloudSyncing(false), 2000);
   }, [userRole]);
 
-  // 3. Connect to Network
+  // 2. Create Refs for handlers
+  // This allows the connection effect to depend ONLY on mount, while still using the latest state
+  const handleBusUpdateRef = useRef(handleBusUpdate);
+  const handleConfigUpdateRef = useRef(handleConfigUpdate);
+
+  useEffect(() => {
+    handleBusUpdateRef.current = handleBusUpdate;
+  }, [handleBusUpdate]);
+
+  useEffect(() => {
+    handleConfigUpdateRef.current = handleConfigUpdate;
+  }, [handleConfigUpdate]);
+
+  // 3. Connect to Network (RUNS ONCE ON MOUNT)
   useEffect(() => {
     const disconnect = connectToRealtime(
-      handleBusUpdate, 
-      handleConfigUpdate,
+      (data) => handleBusUpdateRef.current(data), 
+      (data) => handleConfigUpdateRef.current(data),
       (status) => setConnectionStatus(status)
     );
     return () => disconnect();
-  }, [handleBusUpdate, handleConfigUpdate]);
+  }, []); // Empty dependency array ensures we don't reconnect on state changes
 
   // 4. Admin Broadcasting (Sending Cloud Data)
   const handleAdminRouteUpdate = (newRoutes: BusRoute[]) => {
