@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BusRoute } from '../types.ts';
-import { Phone, ShieldAlert, Clock, Bus, UserCircle, Crosshair, MapPin, Power, Navigation, SignalHigh, Eye, EyeOff, LogOut, Navigation2, Compass } from 'lucide-react';
+import { Phone, ShieldAlert, Clock, Bus, UserCircle, Crosshair, MapPin, Power, Navigation, SignalHigh, Eye, EyeOff, LogOut, Navigation2, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as maplibregl from 'maplibre-gl';
 import { motion, useAnimation, PanInfo, AnimatePresence } from 'framer-motion';
 
@@ -10,9 +10,10 @@ interface MapInterfaceProps {
   userRole?: string;
   onToggleTracking?: (status: boolean) => void;
   onLogout?: () => void;
+  onSwitchRoute?: (direction: 'next' | 'prev') => void;
 }
 
-const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRole, onToggleTracking, onLogout }) => {
+const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRole, onToggleTracking, onLogout, onSwitchRoute }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [centerTarget, setCenterTarget] = useState<'bus' | 'user'>('bus');
   const [bearing, setBearing] = useState(0);
@@ -124,19 +125,35 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       updateStopMarkers(map);
     });
 
-    const updateStopMarkers = (mapInstance: maplibregl.Map) => {
-      stopMarkersRef.current.forEach(m => m.remove());
-      stopMarkersRef.current = route.stops.map((stop, idx) => {
-        const el = document.createElement('div');
-        el.className = `w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-[9px] font-black text-white ${stop.status === 'passed' ? 'bg-slate-400' : stop.status === 'current' ? 'bg-yellow-500 ring-4 ring-yellow-500/20' : 'bg-blue-500'}`;
-        el.innerText = (idx + 1).toString();
-        return new maplibregl.Marker({ element: el }).setLngLat([stop.lng, stop.lat]).addTo(mapInstance);
-      });
-    };
-
     mapRef.current = map;
     return () => { if (mapRef.current) mapRef.current.remove(); };
-  }, []);
+  }, []); // Only run once on mount
+
+  // Update Route Path when route changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getStyle() || !route.path) return;
+
+    const source = map.getSource('bus-path') as maplibregl.GeoJSONSource;
+    if (source) {
+        source.setData({ 
+            type: 'Feature', 
+            properties: {}, 
+            geometry: { type: 'LineString', coordinates: route.path } 
+        });
+    }
+    updateStopMarkers(map);
+  }, [route.id, route.path]); // Re-run when route changes
+
+  const updateStopMarkers = (mapInstance: maplibregl.Map) => {
+    stopMarkersRef.current.forEach(m => m.remove());
+    stopMarkersRef.current = route.stops.map((stop, idx) => {
+      const el = document.createElement('div');
+      el.className = `w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-[9px] font-black text-white ${stop.status === 'passed' ? 'bg-slate-400' : stop.status === 'current' ? 'bg-yellow-500 ring-4 ring-yellow-500/20' : 'bg-blue-500'}`;
+      el.innerText = (idx + 1).toString();
+      return new maplibregl.Marker({ element: el }).setLngLat([stop.lng, stop.lat]).addTo(mapInstance);
+    });
+  };
 
   // 1. Handle Map Mode Transitions (Toggle)
   useEffect(() => {
@@ -144,45 +161,28 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     if (!map || !map.getStyle()) return;
 
     if (isHeadingUp) {
-      // Smooth Transition into Driver Mode
-      map.flyTo({
-        bearing: bearing,
-        center: busLngLat,
-        pitch: 60,
-        zoom: 19,
-        duration: 1500,
-        essential: true
-      });
+      map.flyTo({ bearing: bearing, center: busLngLat, pitch: 60, zoom: 19, duration: 1500 });
     } else {
-      // Smooth Transition back to Overview
-      map.flyTo({
-        bearing: 0,
-        pitch: 0,
-        zoom: 17.5,
-        duration: 1500,
-        essential: true
-      });
+      map.flyTo({ bearing: 0, pitch: 0, zoom: 17.5, duration: 1500 });
     }
-  }, [isHeadingUp]); // Only run when mode changes
+  }, [isHeadingUp]);
 
   // 2. Handle Continuous Updates (Tracking)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getStyle() || !isHeadingUp) return;
 
-    // Throttle updates to prevent lag from high-frequency sensor data (e.g., compass)
     const now = Date.now();
-    if (now - lastUpdateRef.current < 50) return; // Cap at ~20fps
+    if (now - lastUpdateRef.current < 50) return; 
     lastUpdateRef.current = now;
 
-    // Use easeTo for smooth continuous updates
     map.easeTo({
       bearing: bearing,
       center: busLngLat,
       pitch: 60,
       zoom: 19,
-      duration: 300, // Short duration for responsive feel
-      easing: (t) => t // Linear easing prevents "wobble"
+      duration: 300, 
+      easing: (t) => t 
     });
   }, [bearing, busLngLat, isHeadingUp]);
 
@@ -199,14 +199,12 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       
       let currentBearing = bearing;
 
-      // Use explicit heading from driver device if available
       if (typeof route.heading === 'number') {
         currentBearing = route.heading;
         if (Math.abs(currentBearing - bearing) > 1) {
           setBearing(currentBearing);
         }
       } else if (prevCoordsRef.current) {
-        // Fallback to calculation from coordinates
         const newBearing = calculateBearing(prevCoordsRef.current, busLngLat);
         if (Math.abs(newBearing - bearing) > 1) {
           currentBearing = newBearing;
@@ -222,27 +220,17 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                   <!-- Windshield -->
                   <div class="w-full h-6 bg-slate-800 mt-2 relative border-b border-slate-700">
                      <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent"></div>
-                     <!-- Wipers -->
                      <div class="absolute bottom-0 left-2 w-3 h-0.5 bg-slate-600 origin-left -rotate-12"></div>
                      <div class="absolute bottom-0 right-2 w-3 h-0.5 bg-slate-600 origin-right rotate-12"></div>
                   </div>
-                  
-                  <!-- Roof Vents -->
                   <div class="mx-auto w-6 h-8 border border-yellow-600/10 bg-yellow-400/30 rounded mt-3"></div>
                   <div class="mx-auto w-5 h-5 border border-yellow-600/10 bg-yellow-400/30 rounded-full mt-4"></div>
-
-                  <!-- Rear Window -->
                   <div class="absolute bottom-1 w-full h-2 bg-slate-800/90"></div>
-                  
-                  <!-- Brake Lights -->
                   <div class="absolute bottom-0.5 left-1 w-2 h-1 bg-red-500 rounded-sm"></div>
                   <div class="absolute bottom-0.5 right-1 w-2 h-1 bg-red-500 rounded-sm"></div>
                </div>
-               
-               <!-- Mirrors -->
                <div class="absolute top-6 -left-1.5 w-1.5 h-3 bg-slate-800 rounded-l-md border-r border-slate-600"></div>
                <div class="absolute top-6 -right-1.5 w-1.5 h-3 bg-slate-800 rounded-r-md border-l border-slate-600"></div>
-
                ${isLive ? '<div class="live-indicator absolute -top-1 -right-1 z-20 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-md"></div>' : ''}
             </div>
       `;
@@ -250,29 +238,20 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       if (!busMarkerRef.current) {
         const busEl = document.createElement('div');
         busEl.className = 'bus-marker';
-        busEl.innerHTML = `
-          <div style="transition: transform 0.3s ease-out; transform: rotate(${currentBearing}deg);">
-             ${getRealisticBusContent(route.isLive)}
-          </div>
-        `;
+        busEl.innerHTML = `<div style="transition: transform 0.3s ease-out; transform: rotate(${currentBearing}deg);">${getRealisticBusContent(route.isLive)}</div>`;
 
         busMarkerRef.current = new maplibregl.Marker({ 
           element: busEl,
           anchor: 'center',
           rotationAlignment: 'map',
           pitchAlignment: 'map'
-        })
-          .setLngLat(busLngLat)
-          .addTo(map);
+        }).setLngLat(busLngLat).addTo(map);
       } else {
         busMarkerRef.current.setLngLat(busLngLat);
         const wrapper = busMarkerRef.current.getElement().firstElementChild as HTMLElement;
         if (wrapper) {
             wrapper.style.transform = `rotate(${currentBearing}deg)`;
-            const hasLiveIndicator = wrapper.querySelector('.live-indicator');
-            if (!!hasLiveIndicator !== !!route.isLive) {
-                 wrapper.innerHTML = getRealisticBusContent(route.isLive);
-            }
+            wrapper.innerHTML = getRealisticBusContent(route.isLive);
         }
       }
     }
@@ -310,27 +289,20 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     const { offset, velocity } = info;
     const currentY = snapPoint + offset.y;
     let nearest = snapPoint;
-
-    // Threshold for snapping to the next state (pixel distance)
     const SNAP_THRESHOLD = 120;
 
-    // 1. High Velocity Swipes (Flicks)
     if (Math.abs(velocity.y) > 400) {
       if (velocity.y > 0) {
-        // Swipe Down
         if (snapPoint === EXPANDED_Y) nearest = COLLAPSED_Y;
         else if (snapPoint === COLLAPSED_Y) nearest = MINIMIZED_Y;
         else nearest = HIDDEN_Y;
       } else {
-        // Swipe Up
         if (snapPoint === HIDDEN_Y) nearest = MINIMIZED_Y;
         else if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
         else nearest = EXPANDED_Y;
       }
     } else {
-      // 2. Positional Snap (Slow Drag)
       if (snapPoint === EXPANDED_Y) {
-         // If at Top, need to drag down significantly to collapse
          if (offset.y > SNAP_THRESHOLD) nearest = COLLAPSED_Y;
          else nearest = EXPANDED_Y;
       } else if (snapPoint === COLLAPSED_Y) {
@@ -338,13 +310,11 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
          else if (offset.y > SNAP_THRESHOLD) nearest = MINIMIZED_Y;
          else nearest = COLLAPSED_Y;
       } else if (snapPoint === MINIMIZED_Y) {
-         // Minimized
          if (offset.y > 80) nearest = HIDDEN_Y;
          else if (offset.y < -SNAP_THRESHOLD) nearest = COLLAPSED_Y;
          else nearest = MINIMIZED_Y;
       }
     }
-    
     setSnapPoint(nearest);
     controls.start({ y: nearest });
   };
@@ -364,13 +334,19 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pt-6 pointer-events-none">
         <div className="bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border border-white/50 pointer-events-auto">
           <div className="flex items-center gap-3">
+             {userRole !== 'driver' && onSwitchRoute && (
+                <button onClick={() => onSwitchRoute('prev')} className="p-1 rounded-full hover:bg-slate-100 active:scale-90"><ChevronLeft className="w-4 h-4 text-slate-400" /></button>
+             )}
             <div className={`p-2 rounded-xl transition-colors ${route.isLive ? 'bg-green-100' : 'bg-slate-100'}`}>
                <div className={`w-3 h-3 rounded-full ${route.isLive ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`} />
             </div>
             <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{route.isLive ? 'Live' : 'Stationary'}</p>
-                <p className="font-extrabold text-slate-900 text-sm leading-none">{route.name}</p>
+                <p className="font-extrabold text-slate-900 text-sm leading-none truncate max-w-[150px]">{route.name}</p>
             </div>
+            {userRole !== 'driver' && onSwitchRoute && (
+                <button onClick={() => onSwitchRoute('next')} className="p-1 rounded-full hover:bg-slate-100 active:scale-90"><ChevronRight className="w-4 h-4 text-slate-400" /></button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {userRole === 'driver' && (
@@ -415,7 +391,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                 </div>
                 <div className="flex-1">
                   <h4 className="text-white font-black text-[11px] uppercase tracking-[0.15em] mb-0.5">Live Tracking</h4>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-tight">Your location is being broadcasted</p>
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest leading-tight">Broadcasting on: <span className="text-white">{route.name}</span></p>
                 </div>
               </div>
               <button 

@@ -81,7 +81,6 @@ const App: React.FC = () => {
   
   const [activeRouteId, setActiveRouteId] = useState<string>(() => {
     const storedRoutes = loadStored('bus_routes', INITIAL_ROUTES);
-    // Try to find the first route
     return storedRoutes.length > 0 ? storedRoutes[0].id : '';
   });
   
@@ -96,10 +95,24 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bus_drivers', JSON.stringify(drivers)); }, [drivers]);
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
 
+  // --- Automatic Route Assignment Logic ---
+  // If data changes (e.g. from cloud), ensure Driver is still assigned to the correct route
+  useEffect(() => {
+    if (isLoggedIn && userRole === 'driver' && currentUser) {
+      const bus = buses.find(b => b.driverId === currentUser.id);
+      const route = routes.find(r => r.busId === bus?.id);
+      if (route && route.id !== activeRouteId) {
+        console.log(`🔄 Auto-assigning Driver to Route: ${route.name}`);
+        setActiveRouteId(route.id);
+      }
+    }
+  }, [routes, buses, isLoggedIn, userRole, currentUser]);
+
   // --- Real-time Logic (Stabilized) ---
 
   // 1. Define handlers
   const handleBusUpdate = useCallback((data: BusUpdatePayload) => {
+    // Prevent Echo: If I am the driver for Route X, ignore updates about Route X coming from the server
     if (userRole === 'driver' && activeRouteId === data.routeId) return;
 
     setRoutes(prev => prev.map(r => {
@@ -157,19 +170,15 @@ const App: React.FC = () => {
   }, []);
 
   // 4. Admin Broadcasting (Sending ALL Data)
-  // This function is called by AdminDashboard whenever ANY data changes
   const handleAdminUpdate = (
     type: 'routes' | 'buses' | 'drivers' | 'students',
     newData: any[]
   ) => {
-    // 1. Update Local State immediately
     if (type === 'routes') setRoutes(newData as BusRoute[]);
     if (type === 'buses') setBuses(newData as Bus[]);
     if (type === 'drivers') setDrivers(newData as Driver[]);
     if (type === 'students') setStudents(newData as Student[]);
 
-    // 2. Broadcast Global State
-    // We use the new data for the modified type, and current state for others.
     publishGlobalConfig({
       routes: type === 'routes' ? newData as BusRoute[] : routes,
       buses: type === 'buses' ? newData as Bus[] : buses,
@@ -277,6 +286,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRouteSwitch = (direction: 'next' | 'prev') => {
+    const currentIndex = routes.findIndex(r => r.id === activeRouteId);
+    let nextIndex = 0;
+    if (direction === 'next') {
+        nextIndex = (currentIndex + 1) % routes.length;
+    } else {
+        nextIndex = (currentIndex - 1 + routes.length) % routes.length;
+    }
+    setActiveRouteId(routes[nextIndex].id);
+  };
+
   const handleLogin = (email: string, password?: string): boolean => {
     const normEmail = email.toLowerCase().trim();
     const normPass = password?.trim() || '';
@@ -356,6 +376,7 @@ const App: React.FC = () => {
           userRole={userRole}
           onToggleTracking={handleToggleTracking}
           onLogout={handleLogout}
+          onSwitchRoute={handleRouteSwitch}
         />;
       case 'CHAT':
         return <AIChatbot />;
