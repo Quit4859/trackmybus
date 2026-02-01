@@ -7,6 +7,7 @@
 ![Gemini AI](https://img.shields.io/badge/Gemini_AI-3.0-4285F4?style=for-the-badge&logo=googlegemini)
 ![Three.js](https://img.shields.io/badge/Three.js-R170-000000?style=for-the-badge&logo=threedotjs)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwindcss)
+![MQTT](https://img.shields.io/badge/MQTT-Realtime-660066?style=for-the-badge&logo=mqtt)
 
 > **"Are you tired of standing at the bus stop wondering where the bus is?"**
 >
@@ -17,63 +18,59 @@
 ## 🏗️ System Architecture
 
 ```mermaid
-graph LR
+graph TD
     %% Definitions
-    subgraph Users ["fa:fa-users User Ecosystem"]
+    subgraph Clients ["📱 Client Layer (React + Vite)"]
         direction TB
         Driver["👨‍✈️ Driver App"]
         Student["🎓 Student App"]
         Admin["🛡️ Admin Panel"]
+        State["📦 Global State Store"]
     end
 
-    subgraph Core ["fa:fa-gears Transit Engine"]
+    subgraph Cloud ["☁️ Cloud Services"]
         direction TB
-        State["📦 Global State"]
-        GPS["📍 Telemetry Logic"]
-        Router["🚦 Auth Guard"]
-    end
-
-    subgraph AI_Services ["fa:fa-brain AI Intelligence"]
-        direction TB
+        MQTT["📡 MQTT Broker (EMQX)"]
         Gemini["🧠 Gemini 3.0 Flash"]
-        Vision["👁️ Vision Analysis"]
+        OSRM["🛣️ OSRM Routing API"]
     end
 
-    subgraph Mapping ["fa:fa-map Spatial Stack"]
+    subgraph Visualization ["🎨 Rendering Engine"]
         direction TB
         MapLibre["🗺️ MapLibre GL"]
-        OSRM["🛣️ OSRM Routing"]
-        ThreeJS["🧊 Three.js (3D)"]
+        ThreeJS["🧊 Three.js (3D Bus)"]
     end
 
-    %% Connections
-    Driver ----> GPS
-    GPS ----> State
-    State ----> Student & Admin
-    
-    Student -- "Natural Language" --> Gemini
-    Student -- "Capture Image" --> Vision
-    Vision & Gemini ----> State
+    %% Real-time Telemetry Flow
+    Driver -- "1. GPS Updates (Pub)" --> MQTT
+    MQTT -- "2. Live Coordinates (Sub)" --> State
+    State -- "3. Interpolation" --> MapLibre
+    MapLibre -- "4. Bearing & Pitch" --> ThreeJS
 
-    Admin -- "Set Waypoints" --> OSRM
-    OSRM -- "Geometry" --> State
-    State -- "Render" --> MapLibre & ThreeJS
+    %% Admin & Configuration Flow
+    Admin -- "5. Update Route/Bus (Pub)" --> MQTT
+    MQTT -- "6. Sync Config (Sub)" --> State
+
+    %% AI Assistance Flow
+    Student -- "7. Chat / Image Query" --> Gemini
+    Gemini -- "8. Contextual Response" --> Student
+
+    %% Routing Flow
+    Admin -- "9. Waypoints" --> OSRM
+    OSRM -- "10. Polyline Geometry" --> State
 
     %% Styling
-    classDef userNode fill:#ecfdf5,stroke:#10b981,stroke-width:2px;
-    classDef coreNode fill:#eff6ff,stroke:#3b82f6,stroke-width:2px;
-    classDef aiNode fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px;
-    classDef mapNode fill:#fffbeb,stroke:#f59e0b,stroke-width:2px;
+    classDef clientNode fill:#ecfdf5,stroke:#10b981,stroke-width:2px;
+    classDef cloudNode fill:#eff6ff,stroke:#3b82f6,stroke-width:2px;
+    classDef vizNode fill:#fffbeb,stroke:#f59e0b,stroke-width:2px;
 
-    class Driver,Student,Admin userNode;
-    class State,GPS,Router coreNode;
-    class Gemini,Vision aiNode;
-    class MapLibre,OSRM,ThreeJS mapNode;
+    class Driver,Student,Admin,State clientNode;
+    class MQTT,Gemini,OSRM cloudNode;
+    class MapLibre,ThreeJS vizNode;
 
-    style Users fill:#f0fdf4,stroke:#16a34a,stroke-dasharray: 5 5
-    style Core fill:#f0f9ff,stroke:#0284c7,stroke-dasharray: 5 5
-    style AI_Services fill:#faf5ff,stroke:#7c3aed,stroke-dasharray: 5 5
-    style Mapping fill:#fffceb,stroke:#d97706,stroke-dasharray: 5 5
+    style Clients fill:#f0fdf4,stroke:#16a34a,stroke-dasharray: 5 5
+    style Cloud fill:#f0f9ff,stroke:#0284c7,stroke-dasharray: 5 5
+    style Visualization fill:#fffceb,stroke:#d97706,stroke-dasharray: 5 5
 ```
 
 ---
@@ -82,11 +79,11 @@ graph LR
 
 | Feature | Tech Stack | Description |
 | :--- | :--- | :--- |
-| **Live Telemetry** | `Geolocation API` + `Lerp` | Real-time bus location updates with smooth 20fps interpolation and heading synchronization. |
+| **Live Telemetry** | `MQTT` + `Geolocation` | Sub-second latency updates via WebSocket-based MQTT broker with interpolation. |
 | **AI Copilot** | `Gemini 3.0 Flash` | Context-aware chatbot for schedules, routes, and safety inquiries. |
 | **Visual Intelligence** | `Gemini Vision` | "Scan & Check" feature to analyze lost items, printed notices, or maintenance issues. |
 | **3D Spatial Map** | `MapLibre` + `Three.js` | Immersive map experience with 3D buildings and realistic bus models. |
-| **Role-Based Access** | `React Router` + `State` | Dedicated interfaces for Students (Tracking), Drivers (Broadcasting), and Admins (Fleet Mgmt). |
+| **Role-Based Access** | `React Router` | Dedicated interfaces for Students (Tracking), Drivers (Broadcasting), and Admins (Fleet Mgmt). |
 
 ---
 
@@ -129,10 +126,10 @@ Explore the platform using these pre-configured accounts:
 
 ## ⚡ Technical Highlights
 
-*   **Multimodal AI Integration**: Leverages Google's Gemini 3.0 for both text-based assistance and image analysis (Zero-shot vision tasks).
-*   **Driver Compass**: Implements device orientation API to provide "Heading-Up" navigation mode for drivers.
-*   **Resilient State Management**: Custom `usePersistedState` implementation to maintain fleet data across reloads without a backend.
-*   **Performance Optimization**: Vendor chunk splitting for heavy 3D/Map libraries to ensure fast First Contentful Paint (FCP).
+*   **Real-time Sync**: Uses MQTT (EMQX) over WebSockets for bidirectional communication between drivers, students, and admins.
+*   **Multimodal AI**: Leverages Google's Gemini 3.0 for both text-based assistance and image analysis.
+*   **Resilient State**: Custom synchronization logic handles network drops and reconnects automatically.
+*   **Performance**: Optimized 3D rendering with procedural generation for bus models to minimize asset loading.
 
 ---
 *Built with ❤️ for Campus Commuters*

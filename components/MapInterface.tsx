@@ -90,7 +90,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       zoom: 17.5,
       pitch: 0, 
       bearing: 0,
-      antialias: true,
       attributionControl: false,
       fadeDuration: 0,
     });
@@ -136,7 +135,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       updateStopMarkers(map);
     });
 
-    // NOTE: Removed previous dragstart listener to allow for strict locking
+    // NOTE: Removed previous dragstart listener that unlocked the map to allow for strict locking
 
     mapRef.current = map;
     return () => { 

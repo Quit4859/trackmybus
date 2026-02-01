@@ -122,7 +122,6 @@ export default function AdminDashboard({
       center: TIPTUR_LNG_LAT,
       zoom: 13,
       pitch: 45,
-      antialias: false,
       attributionControl: false,
       fadeDuration: 0
     });
@@ -187,7 +186,6 @@ export default function AdminDashboard({
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: center as [number, number],
       zoom: 15,
-      antialias: false,
       attributionControl: false,
       fadeDuration: 0,
     });
