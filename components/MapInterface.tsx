@@ -136,10 +136,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       updateStopMarkers(map);
     });
 
-    // Auto-Unlock if user drags map manually
-    map.on('dragstart', () => {
-        setCenterTarget(null);
-    });
+    // NOTE: Removed previous dragstart listener to allow for strict locking
 
     mapRef.current = map;
     return () => { 
@@ -147,6 +144,32 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         if (mapRef.current) mapRef.current.remove(); 
     };
   }, []); 
+
+  // Handle Strict Lock / Unlock Logic
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (centerTarget === 'bus') {
+        // Strict Lock: User cannot move, zoom, or rotate the map
+        map.dragPan.disable();
+        map.scrollZoom.disable();
+        map.boxZoom.disable();
+        map.dragRotate.disable();
+        map.keyboard.disable();
+        map.touchZoomRotate.disable();
+        map.doubleClickZoom.disable();
+    } else {
+        // Unlocked: User can interact freely
+        map.dragPan.enable();
+        map.scrollZoom.enable();
+        map.boxZoom.enable();
+        map.dragRotate.enable();
+        map.keyboard.enable();
+        map.touchZoomRotate.enable();
+        map.doubleClickZoom.enable();
+    }
+  }, [centerTarget]);
 
   // Update Route Path when route changes
   useEffect(() => {
@@ -336,9 +359,9 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
 
   const handleToggleLock = () => {
       if (centerTarget === 'bus') {
-          setCenterTarget(null); // Unlock
+          setCenterTarget(null); // Unlock (User can pan/zoom)
       } else {
-          setCenterTarget('bus'); // Lock
+          setCenterTarget('bus'); // Hard Lock (User cannot pan/zoom)
           // Immediate jump to bus
           if (mapRef.current && currentBusPos.current) {
               mapRef.current.flyTo({ center: currentBusPos.current, zoom: 18 });
