@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BusRoute } from '../types.ts';
-import { Phone, ShieldAlert, Clock, Bus, UserCircle, Crosshair, MapPin, Power, Navigation, SignalHigh, Eye, EyeOff, LogOut, Navigation2, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Phone, ShieldAlert, Clock, Bus, UserCircle, Crosshair, MapPin, Power, Navigation, SignalHigh, Eye, EyeOff, LogOut, Navigation2, Compass, ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react';
 import * as maplibregl from 'maplibre-gl';
 import { motion, useAnimation, PanInfo, AnimatePresence } from 'framer-motion';
 
@@ -15,7 +15,8 @@ interface MapInterfaceProps {
 
 const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRole, onToggleTracking, onLogout, onSwitchRoute }) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [centerTarget, setCenterTarget] = useState<'bus' | 'user'>('bus');
+  // centerTarget: 'bus' = locked on bus, 'user' = locked on user, null = free roaming
+  const [centerTarget, setCenterTarget] = useState<'bus' | 'user' | null>('bus');
   const [bearing, setBearing] = useState(0);
   const [isHeadingUp, setIsHeadingUp] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -24,7 +25,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
   const prevCoordsRef = useRef<[number, number] | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  
   const controls = useAnimation();
 
   // Animation Refs
@@ -135,12 +136,17 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       updateStopMarkers(map);
     });
 
+    // Auto-Unlock if user drags map manually
+    map.on('dragstart', () => {
+        setCenterTarget(null);
+    });
+
     mapRef.current = map;
     return () => { 
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         if (mapRef.current) mapRef.current.remove(); 
     };
-  }, []); // Only run once on mount
+  }, []); 
 
   // Update Route Path when route changes
   useEffect(() => {
@@ -156,7 +162,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         });
     }
     updateStopMarkers(map);
-  }, [route.id, route.path]); // Re-run when route changes
+  }, [route.id, route.path]); 
 
   const updateStopMarkers = (mapInstance: maplibregl.Map) => {
     stopMarkersRef.current.forEach(m => m.remove());
@@ -183,6 +189,8 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
 
   const toggleHeadingMode = () => {
     setIsHeadingUp(prev => !prev);
+    // If enabling Heading Up, force lock onto bus
+    if (!isHeadingUp) setCenterTarget('bus');
   };
 
   // --- SMOOTH INTERPOLATION LOOP ---
@@ -202,23 +210,23 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
             const [targetLng, targetLat] = targetBusPos.current;
 
             // Simple LERP: Move 10% of the way to target per frame
-            // This creates a smooth slide effect even if updates are 1s apart
             const factor = 0.08; 
             const newLng = lerp(curLng, targetLng, factor);
             const newLat = lerp(curLat, targetLat, factor);
 
+            // Update internal current position
+            currentBusPos.current = [newLng, newLat];
+            
             // Check if we are close enough to stop unnecessary calc (optimization)
             if (Math.abs(newLng - targetLng) > 0.000001 || Math.abs(newLat - targetLat) > 0.000001) {
-                currentBusPos.current = [newLng, newLat];
-                
                 // Update Marker Visuals
                 busMarkerRef.current.setLngLat([newLng, newLat]);
 
-                // Update Camera if tracking bus
-                if (isHeadingUp && centerTarget === 'bus') {
+                // CRITICAL: If locked on bus, update camera frame-by-frame
+                if (centerTarget === 'bus') {
                      mapRef.current.easeTo({
                          center: [newLng, newLat],
-                         bearing: bearing,
+                         bearing: isHeadingUp ? bearing : mapRef.current.getBearing(), // Keep current bearing unless in Driver Mode
                          duration: 0, // Instant update for camera frame
                          easing: t => t
                      });
@@ -303,7 +311,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         }
       }
     }
-  }, [route.heading, route.isLive, isLoading]); // Removed busLngLat dependency as position is handled by loop
+  }, [route.heading, route.isLive, isLoading]); 
 
   // Update User Marker
   useEffect(() => {
@@ -326,11 +334,22 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     }
   }, [userLocation, isLoading]);
 
-  const handleRecenter = () => {
-    if (!mapRef.current) return;
-    const target = centerTarget === 'bus' && userLocation ? [userLocation[1], userLocation[0]] : (currentBusPos.current || busLngLat);
-    mapRef.current.flyTo({ center: target as [number, number], zoom: 18, pitch: 0, speed: 1.2 });
-    setCenterTarget(centerTarget === 'bus' ? 'user' : 'bus');
+  const handleToggleLock = () => {
+      if (centerTarget === 'bus') {
+          setCenterTarget(null); // Unlock
+      } else {
+          setCenterTarget('bus'); // Lock
+          // Immediate jump to bus
+          if (mapRef.current && currentBusPos.current) {
+              mapRef.current.flyTo({ center: currentBusPos.current, zoom: 18 });
+          }
+      }
+  };
+
+  const handleRecenterUser = () => {
+    if (!mapRef.current || !userLocation) return;
+    mapRef.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 18, pitch: 0 });
+    setCenterTarget('user');
   };
 
   const handleDragEnd = (_: any, info: PanInfo) => {
@@ -412,6 +431,15 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         <div ref={containerRef} className="absolute inset-0" />
         {!isLoading && (
           <div className="absolute bottom-[340px] right-6 z-[20] flex flex-col gap-3">
+            {/* Lock on Bus Toggle */}
+            <button 
+                onClick={handleToggleLock}
+                className={`p-4 rounded-2xl shadow-2xl border transition-all active:scale-90 ${centerTarget === 'bus' ? 'bg-green-500 border-green-400 text-white' : 'bg-white border-slate-100 text-slate-900'}`}
+                title={centerTarget === 'bus' ? "Locked on Bus" : "Lock Camera to Bus"}
+            >
+                {centerTarget === 'bus' ? <Lock className="w-6 h-6" /> : <LockOpen className="w-6 h-6" />}
+            </button>
+
             {userRole === 'driver' && (
               <button 
                 onClick={toggleHeadingMode} 
@@ -420,11 +448,13 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                   <Compass className={`w-6 h-6 ${isHeadingUp ? 'animate-pulse' : ''}`} />
               </button>
             )}
+
+            {/* Recenter on User Button */}
             <button 
-              onClick={handleRecenter} 
+              onClick={handleRecenterUser} 
               className={`p-4 rounded-2xl shadow-2xl border transition-all active:scale-90 ${centerTarget === 'user' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white border-slate-100 text-slate-900'}`}
             >
-                {centerTarget === 'user' ? <Navigation2 className="w-6 h-6" /> : <Crosshair className="w-6 h-6" />}
+                <Crosshair className="w-6 h-6" />
             </button>
           </div>
         )}
