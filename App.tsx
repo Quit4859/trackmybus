@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ViewState, BusRoute, Bus, Driver, Student } from './types.ts';
 import MapInterface from './components/MapInterface.tsx';
 import AIChatbot from './components/AIChatbot.tsx';
@@ -6,9 +6,9 @@ import BottomNav from './components/BottomNav.tsx';
 import AdminDashboard from './components/AdminDashboard.tsx';
 import DriverDashboard from './components/DriverDashboard.tsx';
 import LoginPage from './components/LoginPage.tsx';
-import { User, LogOut, RefreshCw } from 'lucide-react';
+import { User, LogOut, RefreshCw, CloudLightning } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { connectToRealtime, publishBusUpdate, BusUpdatePayload } from './services/realtimeService.ts';
+import { connectToRealtime, publishBusUpdate, publishRouteConfig, BusUpdatePayload, ConfigUpdatePayload } from './services/realtimeService.ts';
 
 const INITIAL_DRIVERS: Driver[] = [
   { id: 'D-1', name: 'Rajesh Kumar', phone: '+91 98765 43210', email: 'driver@gmail.com', password: '123123' }
@@ -60,6 +60,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentView, setCurrentView] = useState<ViewState>('TRACKING');
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'driver'>('student');
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   
   // Persistence Loading
   const loadStored = <T,>(key: string, fallback: T): T => {
@@ -87,37 +88,66 @@ const App: React.FC = () => {
   const [gpsError, setGpsError] = useState<{ message: string; code: number; details?: string } | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  // Persistence Saving
+  // Persistence Saving - Local
   useEffect(() => { localStorage.setItem('bus_routes', JSON.stringify(routes)); }, [routes]);
   useEffect(() => { localStorage.setItem('bus_fleet', JSON.stringify(buses)); }, [buses]);
   useEffect(() => { localStorage.setItem('bus_drivers', JSON.stringify(drivers)); }, [drivers]);
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
 
-  // Real-time Connection
-  useEffect(() => {
-    const handleRemoteUpdate = (data: BusUpdatePayload) => {
-      // If I am the driver of this route, I trust my local GPS more than the round-trip echo.
-      if (userRole === 'driver' && activeRouteId === data.routeId) return;
+  // --- Real-time Logic ---
 
-      setRoutes(prev => prev.map(r => {
-        if (r.id === data.routeId) {
-          return {
-            ...r,
-            liveLat: data.lat,
-            liveLng: data.lng,
-            actualLat: data.lat, // Sync actual too so Admin sees it
-            actualLng: data.lng,
-            heading: data.heading,
-            isLive: data.isLive
-          };
-        }
-        return r;
-      }));
-    };
+  // 1. Handle Location Updates
+  const handleBusUpdate = useCallback((data: BusUpdatePayload) => {
+    // If I am the driver of this route, I ignore the echo to prevent jitter
+    if (userRole === 'driver' && activeRouteId === data.routeId) return;
 
-    const disconnect = connectToRealtime(handleRemoteUpdate);
-    return () => disconnect();
+    setRoutes(prev => prev.map(r => {
+      if (r.id === data.routeId) {
+        return {
+          ...r,
+          liveLat: data.lat,
+          liveLng: data.lng,
+          actualLat: data.lat, 
+          actualLng: data.lng,
+          heading: data.heading,
+          isLive: data.isLive
+        };
+      }
+      return r;
+    }));
   }, [userRole, activeRouteId]);
+
+  // 2. Handle Data/Config Sync (Receiving Cloud Data)
+  const handleConfigUpdate = useCallback((data: ConfigUpdatePayload) => {
+    // Only Student and Driver should be forced to update from cloud to avoid Admin conflicts.
+    // However, if there are multiple admins, this keeps them in sync too.
+    if (userRole === 'admin') return; 
+
+    console.log("☁️ Applying Cloud Route Configuration...");
+    setIsCloudSyncing(true);
+    
+    // We merge the cloud data into local state
+    setRoutes(data.routes);
+    
+    // Also save to storage immediately so it persists if they go offline
+    localStorage.setItem('bus_routes', JSON.stringify(data.routes));
+    
+    setTimeout(() => setIsCloudSyncing(false), 2000);
+  }, [userRole]);
+
+  // 3. Connect to Network
+  useEffect(() => {
+    const disconnect = connectToRealtime(handleBusUpdate, handleConfigUpdate);
+    return () => disconnect();
+  }, [handleBusUpdate, handleConfigUpdate]);
+
+  // 4. Admin Broadcasting (Sending Cloud Data)
+  // Whenever Admin changes routes, we push to cloud
+  const handleAdminRouteUpdate = (newRoutes: BusRoute[]) => {
+    setRoutes(newRoutes);
+    // Debounced broadcast could be better, but direct is fine for this scale
+    publishRouteConfig(newRoutes);
+  };
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
@@ -218,6 +248,7 @@ const App: React.FC = () => {
     setRoutes(prev => prev.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r));
 
     // Broadcast status change immediately (even if stationary)
+    // This will be RETAINED by the broker, so new users see "Live" immediately
     if (userLocation) {
         publishBusUpdate({
             routeId: activeRouteId,
@@ -243,7 +274,6 @@ const App: React.FC = () => {
     }
 
     // 2. Driver Check
-    // STRICT password check against current state
     const foundDriver = drivers.find(d => 
       d.email.toLowerCase().trim() === normEmail && 
       (d.password || '') === normPass
@@ -261,7 +291,6 @@ const App: React.FC = () => {
     }
 
     // 3. Student Check
-    // STRICT password check against current state
     const foundStudent = students.find(s => 
       s.email.toLowerCase().trim() === normEmail && 
       (s.password || '') === normPass
@@ -322,7 +351,7 @@ const App: React.FC = () => {
           buses={buses} 
           drivers={drivers}
           students={students}
-          onUpdateRoutes={setRoutes} 
+          onUpdateRoutes={handleAdminRouteUpdate} 
           onUpdateBuses={setBuses} 
           onUpdateDrivers={setDrivers}
           onUpdateStudents={setStudents}
@@ -371,6 +400,14 @@ const App: React.FC = () => {
                   <div className="bg-white p-5 rounded-3xl shadow-2xl border border-red-50 flex items-center gap-4">
                     <RefreshCw className="w-5 h-5 text-red-500 cursor-pointer hover:rotate-180 transition-transform duration-500" onClick={handleReloadGps} />
                     <div className="flex-1 text-sm font-bold text-slate-900">{gpsError.message}</div>
+                  </div>
+                </motion.div>
+              )}
+               {isCloudSyncing && (
+                <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-20 left-4 right-4 z-[3000]">
+                  <div className="bg-blue-500 p-5 rounded-3xl shadow-2xl border border-blue-400 flex items-center gap-4">
+                    <CloudLightning className="w-5 h-5 text-white animate-pulse" />
+                    <div className="flex-1 text-sm font-bold text-white">Updating Routes from Cloud...</div>
                   </div>
                 </motion.div>
               )}
