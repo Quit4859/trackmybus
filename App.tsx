@@ -79,6 +79,10 @@ const App: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>(() => loadStored('bus_drivers', INITIAL_DRIVERS));
   const [students, setStudents] = useState<Student[]>(() => loadStored('bus_students', INITIAL_STUDENTS));
   
+  // Ref to access routes inside effects without dependency cycles
+  const routesRef = useRef(routes);
+  useEffect(() => { routesRef.current = routes; }, [routes]);
+
   const [activeRouteId, setActiveRouteId] = useState<string>(() => {
     const storedRoutes = loadStored('bus_routes', INITIAL_ROUTES);
     return storedRoutes.length > 0 ? storedRoutes[0].id : '';
@@ -96,7 +100,6 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
 
   // --- Automatic Route Assignment Logic ---
-  // If data changes (e.g. from cloud), ensure Driver is still assigned to the correct route
   useEffect(() => {
     if (isLoggedIn && userRole === 'driver' && currentUser) {
       const bus = buses.find(b => b.driverId === currentUser.id);
@@ -108,7 +111,7 @@ const App: React.FC = () => {
     }
   }, [routes, buses, isLoggedIn, userRole, currentUser]);
 
-  // --- Real-time Logic (Stabilized) ---
+  // --- Real-time Logic ---
 
   // 1. Define handlers
   const handleBusUpdate = useCallback((data: BusUpdatePayload) => {
@@ -132,13 +135,11 @@ const App: React.FC = () => {
   }, [userRole, activeRouteId]);
 
   const handleConfigUpdate = useCallback((data: GlobalConfigPayload) => {
-    // Admin is the Source of Truth; ignore inbound config updates to prevent race conditions
     if (userRole === 'admin') return; 
 
     console.log("☁️ Applying Global Cloud Config...");
     setIsCloudSyncing(true);
     
-    // Update all entities
     if (data.routes) setRoutes(data.routes);
     if (data.buses) setBuses(data.buses);
     if (data.drivers) setDrivers(data.drivers);
@@ -211,9 +212,6 @@ const App: React.FC = () => {
         }
         setGpsError({ message: msg, code: error.code });
       },
-      // IMPORTANT: Aggressive GPS settings for driving mode
-      // maximumAge: 0 forces the device to get a fresh position, never cache
-      // timeout: 5000 ensures we don't hang, but keep retry cycle tight
       { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -242,17 +240,16 @@ const App: React.FC = () => {
     }
   }, [isLoggedIn, userRole]);
 
-  // --- DRIVER LOCATION LOGIC (Fixed) ---
+  // --- DRIVER LOCATION LOGIC (Unified) ---
+  const lastBroadcastTime = useRef(0);
 
-  // 1. Update LOCAL state so driver sees their own bus moving
   useEffect(() => {
     if (isLoggedIn && userRole === 'driver' && userLocation) {
       const [lat, lng] = userLocation;
       
+      // 1. Update LOCAL state immediately so driver sees movement
       setRoutes(prev => prev.map(r => {
         if (r.id === activeRouteId) {
-          // We assume if the driver is logged in and GPS is updating, they want to see themselves.
-          // We update actual coords (for admin) and live coords (if live).
           return { 
             ...r, 
             actualLat: lat, 
@@ -264,30 +261,28 @@ const App: React.FC = () => {
         }
         return r;
       }));
-    }
-  }, [isLoggedIn, userRole, userLocation, activeRouteId, userHeading]);
 
-  // 2. Broadcast to NETWORK (Side Effect)
-  // This is separated from the state update to ensure reliability
-  useEffect(() => {
-    if (isLoggedIn && userRole === 'driver' && userLocation) {
-       // Find the CURRENT route state to check if we are live
-       const currentRoute = routes.find(r => r.id === activeRouteId);
-       
-       if (currentRoute && currentRoute.isLive) {
-          // console.log("📡 Broadcasting Location:", userLocation);
-          publishBusUpdate({
-            routeId: currentRoute.id,
-            lat: userLocation[0],
-            lng: userLocation[1],
-            heading: userHeading,
-            isLive: true
-          });
-       }
+      // 2. Broadcast to Network (Throttled, accessing latest state via REF)
+      // Accessing routesRef ensures we see the latest 'isLive' status without adding 'routes' to dependency
+      const currentRoutes = routesRef.current;
+      const currentRoute = currentRoutes.find(r => r.id === activeRouteId);
+
+      if (currentRoute && currentRoute.isLive) {
+         const now = Date.now();
+         // Throttle broadcasts to max 1 per second to prevent flooding, but ensure at least 1 update.
+         if (now - lastBroadcastTime.current > 800) {
+            publishBusUpdate({
+              routeId: currentRoute.id,
+              lat: lat,
+              lng: lng,
+              heading: userHeading,
+              isLive: true
+            });
+            lastBroadcastTime.current = now;
+         }
+      }
     }
-  }, [userLocation, userHeading, isLoggedIn, userRole, activeRouteId, routes]); 
-  // 'routes' dependency ensures we have the latest 'isLive' status. 
-  // Since 'userLocation' triggers the local update above, 'routes' will change, triggering this.
+  }, [isLoggedIn, userRole, userLocation, activeRouteId, userHeading]); // Removed 'routes' from dependency
 
   const activeRoute = routes.find(r => r.id === activeRouteId) || routes[0];
 
@@ -296,16 +291,19 @@ const App: React.FC = () => {
     setRoutes(prev => prev.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r));
 
     // 2. Broadcast Status Change immediately
-    if (userLocation) {
-        console.log(`📡 Toggle Tracking: ${status}`);
-        publishBusUpdate({
-            routeId: activeRouteId,
-            lat: userLocation[0],
-            lng: userLocation[1],
-            heading: userHeading,
-            isLive: status
-        });
-    }
+    // If we have GPS, send it. If not, use the last known route location.
+    const currentRoute = routes.find(r => r.id === activeRouteId);
+    const lat = userLocation ? userLocation[0] : (currentRoute?.liveLat || currentRoute?.stops[0].lat || 0);
+    const lng = userLocation ? userLocation[1] : (currentRoute?.liveLng || currentRoute?.stops[0].lng || 0);
+
+    console.log(`📡 Toggle Tracking: ${status}`);
+    publishBusUpdate({
+        routeId: activeRouteId,
+        lat: lat,
+        lng: lng,
+        heading: userHeading,
+        isLive: status
+    });
   };
 
   const handleRouteSwitch = (direction: 'next' | 'prev') => {
