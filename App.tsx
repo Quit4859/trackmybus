@@ -8,7 +8,7 @@ import DriverDashboard from './components/DriverDashboard.tsx';
 import LoginPage from './components/LoginPage.tsx';
 import { User, LogOut, RefreshCw, CloudLightning, Wifi, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { connectToRealtime, publishBusUpdate, publishRouteConfig, BusUpdatePayload, ConfigUpdatePayload } from './services/realtimeService.ts';
+import { connectToRealtime, publishBusUpdate, publishGlobalConfig, BusUpdatePayload, GlobalConfigPayload } from './services/realtimeService.ts';
 
 const INITIAL_DRIVERS: Driver[] = [
   { id: 'D-1', name: 'Rajesh Kumar', phone: '+91 98765 43210', email: 'driver@gmail.com', password: '123123' }
@@ -98,9 +98,8 @@ const App: React.FC = () => {
 
   // --- Real-time Logic (Stabilized) ---
 
-  // 1. Define handlers (these change frequently)
+  // 1. Define handlers
   const handleBusUpdate = useCallback((data: BusUpdatePayload) => {
-    // If I am the driver of this specific route, I ignore the echo to prevent jitter
     if (userRole === 'driver' && activeRouteId === data.routeId) return;
 
     setRoutes(prev => prev.map(r => {
@@ -119,22 +118,23 @@ const App: React.FC = () => {
     }));
   }, [userRole, activeRouteId]);
 
-  const handleConfigUpdate = useCallback((data: ConfigUpdatePayload) => {
-    // Admin typically is the Source of Truth, so they ignore updates to prevent reverting their own edits.
+  const handleConfigUpdate = useCallback((data: GlobalConfigPayload) => {
+    // Admin is the Source of Truth; ignore inbound config updates to prevent race conditions
     if (userRole === 'admin') return; 
 
-    console.log("☁️ Applying Cloud Route Configuration...");
+    console.log("☁️ Applying Global Cloud Config...");
     setIsCloudSyncing(true);
     
-    setRoutes(prevRoutes => {
-       return data.routes;
-    });
+    // Update all entities
+    if (data.routes) setRoutes(data.routes);
+    if (data.buses) setBuses(data.buses);
+    if (data.drivers) setDrivers(data.drivers);
+    if (data.students) setStudents(data.students);
     
     setTimeout(() => setIsCloudSyncing(false), 2000);
   }, [userRole]);
 
   // 2. Create Refs for handlers
-  // This allows the connection effect to depend ONLY on mount, while still using the latest state
   const handleBusUpdateRef = useRef(handleBusUpdate);
   const handleConfigUpdateRef = useRef(handleConfigUpdate);
 
@@ -146,7 +146,7 @@ const App: React.FC = () => {
     handleConfigUpdateRef.current = handleConfigUpdate;
   }, [handleConfigUpdate]);
 
-  // 3. Connect to Network (RUNS ONCE ON MOUNT)
+  // 3. Connect to Network
   useEffect(() => {
     const disconnect = connectToRealtime(
       (data) => handleBusUpdateRef.current(data), 
@@ -154,12 +154,28 @@ const App: React.FC = () => {
       (status) => setConnectionStatus(status)
     );
     return () => disconnect();
-  }, []); // Empty dependency array ensures we don't reconnect on state changes
+  }, []);
 
-  // 4. Admin Broadcasting (Sending Cloud Data)
-  const handleAdminRouteUpdate = (newRoutes: BusRoute[]) => {
-    setRoutes(newRoutes);
-    publishRouteConfig(newRoutes);
+  // 4. Admin Broadcasting (Sending ALL Data)
+  // This function is called by AdminDashboard whenever ANY data changes
+  const handleAdminUpdate = (
+    type: 'routes' | 'buses' | 'drivers' | 'students',
+    newData: any[]
+  ) => {
+    // 1. Update Local State immediately
+    if (type === 'routes') setRoutes(newData as BusRoute[]);
+    if (type === 'buses') setBuses(newData as Bus[]);
+    if (type === 'drivers') setDrivers(newData as Driver[]);
+    if (type === 'students') setStudents(newData as Student[]);
+
+    // 2. Broadcast Global State
+    // We use the new data for the modified type, and current state for others.
+    publishGlobalConfig({
+      routes: type === 'routes' ? newData as BusRoute[] : routes,
+      buses: type === 'buses' ? newData as Bus[] : buses,
+      drivers: type === 'drivers' ? newData as Driver[] : drivers,
+      students: type === 'students' ? newData as Student[] : students,
+    });
   };
 
   const startTracking = useCallback(() => {
@@ -221,8 +237,6 @@ const App: React.FC = () => {
       
       setRoutes(prev => prev.map(r => {
         if (r.id === activeRouteId) {
-          // If we are live, we update the live coords locally AND broadcast
-          // If not live, we only update 'actual' (hidden) coords
           if (r.isLive) {
             publishBusUpdate({
               routeId: r.id,
@@ -351,10 +365,10 @@ const App: React.FC = () => {
           buses={buses} 
           drivers={drivers}
           students={students}
-          onUpdateRoutes={handleAdminRouteUpdate} 
-          onUpdateBuses={setBuses} 
-          onUpdateDrivers={setDrivers}
-          onUpdateStudents={setStudents}
+          onUpdateRoutes={(d) => handleAdminUpdate('routes', d)} 
+          onUpdateBuses={(d) => handleAdminUpdate('buses', d)} 
+          onUpdateDrivers={(d) => handleAdminUpdate('drivers', d)}
+          onUpdateStudents={(d) => handleAdminUpdate('students', d)}
           onLogout={handleLogout} 
           userLocation={userLocation} 
           onResetData={resetAllData}
@@ -422,7 +436,7 @@ const App: React.FC = () => {
                 <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-20 left-4 right-4 z-[3000]">
                   <div className="bg-blue-500 p-5 rounded-3xl shadow-2xl border border-blue-400 flex items-center gap-4">
                     <CloudLightning className="w-5 h-5 text-white animate-pulse" />
-                    <div className="flex-1 text-sm font-bold text-white">Updating Routes from Cloud...</div>
+                    <div className="flex-1 text-sm font-bold text-white">Updating App Data...</div>
                   </div>
                 </motion.div>
               )}

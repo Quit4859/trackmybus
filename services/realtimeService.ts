@@ -1,14 +1,14 @@
 import mqtt from 'mqtt';
-import { BusRoute } from '../types';
+import { BusRoute, Bus, Driver, Student } from '../types';
 
 // Public EMQX Broker (More stable on mobile networks/4G than HiveMQ)
 // Port 8084 is WSS (Secure WebSocket)
 const BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
 
-// Topic Architecture v3
-const TOPIC_BASE = 'college-bus-tracker/v3';
-const TOPIC_CONFIG = `${TOPIC_BASE}/config`; // Global route config
-const TOPIC_UPDATES_WILDCARD = `${TOPIC_BASE}/updates/+`; // Listen to ALL routes
+// Topic Architecture v4 - Updated to sync ALL data
+const TOPIC_BASE = 'college-bus-tracker/v4';
+const TOPIC_CONFIG = `${TOPIC_BASE}/config`; // Global app config (Routes + Users)
+const TOPIC_UPDATES_WILDCARD = `${TOPIC_BASE}/updates/+`; // Listen to ALL live positions
 
 let client: mqtt.MqttClient | null = null;
 
@@ -21,14 +21,18 @@ export interface BusUpdatePayload {
   timestamp: number;
 }
 
-export interface ConfigUpdatePayload {
+// Global Config now includes EVERYTHING needed to run the app on another device
+export interface GlobalConfigPayload {
   routes: BusRoute[];
+  buses: Bus[];
+  drivers: Driver[];
+  students: Student[];
   timestamp: number;
 }
 
 export const connectToRealtime = (
   onBusUpdate: (data: BusUpdatePayload) => void,
-  onConfigUpdate: (data: ConfigUpdatePayload) => void,
+  onConfigUpdate: (data: GlobalConfigPayload) => void,
   onStatusChange?: (status: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void
 ) => {
   // If already connected, do not create a new client
@@ -84,8 +88,8 @@ export const connectToRealtime = (
         onBusUpdate(data);
       } 
       else if (topic === TOPIC_CONFIG) {
-        const data = JSON.parse(msgString) as ConfigUpdatePayload;
-        console.log("🔄 Received Global Route Sync");
+        const data = JSON.parse(msgString) as GlobalConfigPayload;
+        console.log("🔄 Received Global Data Sync");
         onConfigUpdate(data);
       }
     } catch (e) {
@@ -100,10 +104,6 @@ export const connectToRealtime = (
 
   return () => {
     if (client) {
-      // We don't necessarily want to kill the connection on unmount if we want persistence,
-      // but for clean React effects, we end it.
-      // To keep it alive across views, we could move client outside this function scope entirely
-      // but current implementation requires cleanup.
       client.end();
       client = null;
     }
@@ -126,15 +126,15 @@ export const publishBusUpdate = (data: Omit<BusUpdatePayload, 'timestamp'>) => {
 };
 
 /**
- * Broadcasts Admin Route Configuration.
+ * Broadcasts FULL App Configuration (Routes, Buses, Drivers, Students).
  */
-export const publishRouteConfig = (routes: BusRoute[]) => {
+export const publishGlobalConfig = (data: Omit<GlobalConfigPayload, 'timestamp'>) => {
   if (client && client.connected) {
-    const payload: ConfigUpdatePayload = {
-      routes,
+    const payload: GlobalConfigPayload = {
+      ...data,
       timestamp: Date.now()
     };
-    console.log("☁️ Syncing Routes to Cloud...");
+    console.log("☁️ Syncing Global Data to Cloud...");
     client.publish(TOPIC_CONFIG, JSON.stringify(payload), { qos: 1, retain: true });
   }
 };
