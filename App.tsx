@@ -239,29 +239,23 @@ const App: React.FC = () => {
     }
   }, [isLoggedIn, userRole]);
 
-  // Driver Location Logic & Broadcasting
+  // --- DRIVER LOCATION LOGIC (Fixed) ---
+
+  // 1. Update LOCAL state so driver sees their own bus moving
   useEffect(() => {
     if (isLoggedIn && userRole === 'driver' && userLocation) {
       const [lat, lng] = userLocation;
       
       setRoutes(prev => prev.map(r => {
         if (r.id === activeRouteId) {
-          if (r.isLive) {
-            publishBusUpdate({
-              routeId: r.id,
-              lat,
-              lng,
-              heading: userHeading,
-              isLive: true
-            });
-          }
-          
+          // We assume if the driver is logged in and GPS is updating, they want to see themselves.
+          // We update actual coords (for admin) and live coords (if live).
           return { 
             ...r, 
             actualLat: lat, 
             actualLng: lng,
-            liveLat: r.isLive ? lat : (r.liveLat || lat), 
-            liveLng: r.isLive ? lng : (r.liveLng || lng),
+            liveLat: r.isLive ? lat : r.liveLat, 
+            liveLng: r.isLive ? lng : r.liveLng,
             heading: userHeading
           };
         }
@@ -270,12 +264,37 @@ const App: React.FC = () => {
     }
   }, [isLoggedIn, userRole, userLocation, activeRouteId, userHeading]);
 
+  // 2. Broadcast to NETWORK (Side Effect)
+  // This is separated from the state update to ensure reliability
+  useEffect(() => {
+    if (isLoggedIn && userRole === 'driver' && userLocation) {
+       // Find the CURRENT route state to check if we are live
+       const currentRoute = routes.find(r => r.id === activeRouteId);
+       
+       if (currentRoute && currentRoute.isLive) {
+          // console.log("📡 Broadcasting Location:", userLocation);
+          publishBusUpdate({
+            routeId: currentRoute.id,
+            lat: userLocation[0],
+            lng: userLocation[1],
+            heading: userHeading,
+            isLive: true
+          });
+       }
+    }
+  }, [userLocation, userHeading, isLoggedIn, userRole, activeRouteId, routes]); 
+  // 'routes' dependency ensures we have the latest 'isLive' status. 
+  // Since 'userLocation' triggers the local update above, 'routes' will change, triggering this.
+
   const activeRoute = routes.find(r => r.id === activeRouteId) || routes[0];
 
   const handleToggleTracking = (status: boolean) => {
+    // 1. Update Local State
     setRoutes(prev => prev.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r));
 
+    // 2. Broadcast Status Change immediately
     if (userLocation) {
+        console.log(`📡 Toggle Tracking: ${status}`);
         publishBusUpdate({
             routeId: activeRouteId,
             lat: userLocation[0],

@@ -121,7 +121,8 @@ export const publishBusUpdate = (data: Omit<BusUpdatePayload, 'timestamp'>) => {
     };
     // Publish to specific route topic
     const topic = `${TOPIC_BASE}/updates/${data.routeId}`;
-    client.publish(topic, JSON.stringify(payload), { qos: 0, retain: true });
+    // QoS 1 ensures delivery at least once (better for moving vehicles in spotty network)
+    client.publish(topic, JSON.stringify(payload), { qos: 1, retain: true });
   }
 };
 
