@@ -104,9 +104,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     map.on('load', () => {
       // Suppress warnings for missing icons in the map style
       map.on('styleimagemissing', (e) => {
-        const id = e.id; // e.g. 'atm', 'reservoir', etc.
-        console.warn(`Map style image missing: ${id}. Providing empty placeholder.`);
-        
+        const id = e.id;
         // Create a 1x1 transparent pixel as a placeholder to satisfy the map engine
         const width = 1;
         const height = 1;

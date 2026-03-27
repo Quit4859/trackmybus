@@ -128,7 +128,17 @@ export default function AdminDashboard({
       fadeDuration: 0
     });
 
-    map.on('load', () => setIsOverviewMapLoaded(true));
+    map.on('load', () => {
+      // Suppress warnings for missing icons in the map style
+      map.on('styleimagemissing', (e) => {
+        const id = e.id;
+        const width = 1;
+        const height = 1;
+        const data = new Uint8Array(width * height * 4);
+        map.addImage(id, { width, height, data });
+      });
+      setIsOverviewMapLoaded(true);
+    });
     overviewMapRef.current = map;
     return () => { if (overviewMapRef.current) overviewMapRef.current.remove(); overviewMapRef.current = null; };
   }, [activeTab, isEditing]);
@@ -193,6 +203,14 @@ export default function AdminDashboard({
     });
 
     map.on('load', () => {
+      // Suppress warnings for missing icons in the map style
+      map.on('styleimagemissing', (e) => {
+        const id = e.id;
+        const width = 1;
+        const height = 1;
+        const data = new Uint8Array(width * height * 4);
+        map.addImage(id, { width, height, data });
+      });
       map.addSource('route-line', { 
         type: 'geojson', 
         data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: tempPath.length > 1 ? tempPath : [center] } } 
