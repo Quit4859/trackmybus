@@ -48,8 +48,13 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       ? (isValidCoord(route.actualLat, route.actualLng) ? [route.actualLng!, route.actualLat!] : DEFAULT_LNG_LAT)
       : (isValidCoord(route.liveLat, route.liveLng) ? [route.liveLng!, route.liveLat!] : DEFAULT_LNG_LAT);
 
-  // Dynamic Snap Points based on Screen Height
-  const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const [screenHeight, setScreenHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  useEffect(() => {
+    const handleResize = () => setScreenHeight(window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const EXPANDED_Y = 0; // Snap to very top
   // Collapsed: Roughly in the middle-bottom
@@ -97,6 +102,18 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     map.once('styledata', () => setIsLoading(false));
 
     map.on('load', () => {
+      // Suppress warnings for missing icons in the map style
+      map.on('styleimagemissing', (e) => {
+        const id = e.id; // e.g. 'atm', 'reservoir', etc.
+        console.warn(`Map style image missing: ${id}. Providing empty placeholder.`);
+        
+        // Create a 1x1 transparent pixel as a placeholder to satisfy the map engine
+        const width = 1;
+        const height = 1;
+        const data = new Uint8Array(width * height * 4);
+        map.addImage(id, { width, height, data });
+      });
+
       map.addLayer({
         'id': '3d-buildings',
         'source': 'openmaptiles',
@@ -138,8 +155,18 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     // NOTE: Removed previous dragstart listener that unlocked the map to allow for strict locking
 
     mapRef.current = map;
+
+    // Ensure map resizes when container changes
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+    });
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
     return () => { 
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        resizeObserver.disconnect();
         if (mapRef.current) mapRef.current.remove(); 
     };
   }, []); 
@@ -400,11 +427,9 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     if (Math.abs(velocity.y) > 400) {
       if (velocity.y > 0) {
         if (snapPoint === EXPANDED_Y) nearest = COLLAPSED_Y;
-        else if (snapPoint === COLLAPSED_Y) nearest = MINIMIZED_Y;
-        else nearest = HIDDEN_Y;
+        else nearest = HIDDEN_Y; // Skip MINIMIZED_Y when swiping down from COLLAPSED
       } else {
-        if (snapPoint === HIDDEN_Y) nearest = MINIMIZED_Y;
-        else if (snapPoint === MINIMIZED_Y) nearest = COLLAPSED_Y;
+        if (snapPoint === HIDDEN_Y) nearest = COLLAPSED_Y; // Skip MINIMIZED_Y when swiping up from HIDDEN
         else nearest = EXPANDED_Y;
       }
     } else {
@@ -413,12 +438,11 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
          else nearest = EXPANDED_Y;
       } else if (snapPoint === COLLAPSED_Y) {
          if (offset.y < -SNAP_THRESHOLD) nearest = EXPANDED_Y;
-         else if (offset.y > SNAP_THRESHOLD) nearest = MINIMIZED_Y;
+         else if (offset.y > SNAP_THRESHOLD) nearest = HIDDEN_Y; // Go straight to HIDDEN
          else nearest = COLLAPSED_Y;
-      } else if (snapPoint === MINIMIZED_Y) {
-         if (offset.y > 80) nearest = HIDDEN_Y;
-         else if (offset.y < -SNAP_THRESHOLD) nearest = COLLAPSED_Y;
-         else nearest = MINIMIZED_Y;
+      } else if (snapPoint === HIDDEN_Y) {
+         if (offset.y < -SNAP_THRESHOLD) nearest = COLLAPSED_Y;
+         else nearest = HIDDEN_Y;
       }
     }
     setSnapPoint(nearest);
@@ -426,7 +450,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
+    <div className="flex flex-col flex-1 bg-slate-50 relative overflow-hidden">
       <AnimatePresence>
         {isLoading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[2000] bg-slate-50 flex flex-col items-center justify-center p-8 text-center">

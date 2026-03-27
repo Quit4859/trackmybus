@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ViewState, BusRoute, Bus, Driver, Student } from './types.ts';
+import { ViewState, BusRoute, Bus, Driver, Student, EmergencyAlert } from './types.ts';
 import MapInterface from './components/MapInterface.tsx';
 import AIChatbot from './components/AIChatbot.tsx';
 import BottomNav from './components/BottomNav.tsx';
 import AdminDashboard from './components/AdminDashboard.tsx';
 import DriverDashboard from './components/DriverDashboard.tsx';
 import LoginPage from './components/LoginPage.tsx';
-import { User, LogOut, RefreshCw, CloudLightning, Wifi, WifiOff } from 'lucide-react';
+import { User, LogOut, RefreshCw, CloudLightning, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { connectToRealtime, publishBusUpdate, publishGlobalConfig, BusUpdatePayload, GlobalConfigPayload } from './services/realtimeService.ts';
+import { connectToRealtime, publishBusUpdate, publishGlobalConfig, publishEmergency, BusUpdatePayload, GlobalConfigPayload } from './services/realtimeService.ts';
 
 const INITIAL_DRIVERS: Driver[] = [
   { id: 'D-1', name: 'Rajesh Kumar', phone: '+91 98765 43210', email: 'driver@gmail.com', password: '123123' }
@@ -78,6 +78,7 @@ const App: React.FC = () => {
   const [buses, setBuses] = useState<Bus[]>(() => loadStored('bus_fleet', INITIAL_BUSES));
   const [drivers, setDrivers] = useState<Driver[]>(() => loadStored('bus_drivers', INITIAL_DRIVERS));
   const [students, setStudents] = useState<Student[]>(() => loadStored('bus_students', INITIAL_STUDENTS));
+  const [emergencyAlerts, setEmergencyAlerts] = useState<EmergencyAlert[]>(() => loadStored('emergency_alerts', []));
   
   // Ref to access routes inside effects without dependency cycles
   const routesRef = useRef(routes);
@@ -98,6 +99,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bus_fleet', JSON.stringify(buses)); }, [buses]);
   useEffect(() => { localStorage.setItem('bus_drivers', JSON.stringify(drivers)); }, [drivers]);
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
+  useEffect(() => { localStorage.setItem('emergency_alerts', JSON.stringify(emergencyAlerts)); }, [emergencyAlerts]);
 
   // --- Automatic Route Assignment Logic ---
   useEffect(() => {
@@ -148,9 +150,22 @@ const App: React.FC = () => {
     setTimeout(() => setIsCloudSyncing(false), 2000);
   }, [userRole]);
 
+  const handleEmergencyUpdate = useCallback((data: EmergencyAlert) => {
+    setEmergencyAlerts(prev => {
+      if (prev.some(a => a.id === data.id)) return prev;
+      return [data, ...prev];
+    });
+    
+    // If admin, maybe show a notification
+    if (userRole === 'admin') {
+      console.log("🚨 ADMIN NOTIFIED OF EMERGENCY");
+    }
+  }, [userRole]);
+
   // 2. Create Refs for handlers
   const handleBusUpdateRef = useRef(handleBusUpdate);
   const handleConfigUpdateRef = useRef(handleConfigUpdate);
+  const handleEmergencyUpdateRef = useRef(handleEmergencyUpdate);
 
   useEffect(() => {
     handleBusUpdateRef.current = handleBusUpdate;
@@ -160,15 +175,40 @@ const App: React.FC = () => {
     handleConfigUpdateRef.current = handleConfigUpdate;
   }, [handleConfigUpdate]);
 
+  useEffect(() => {
+    handleEmergencyUpdateRef.current = handleEmergencyUpdate;
+  }, [handleEmergencyUpdate]);
+
   // 3. Connect to Network
   useEffect(() => {
     const disconnect = connectToRealtime(
       (data) => handleBusUpdateRef.current(data), 
       (data) => handleConfigUpdateRef.current(data),
+      (data) => handleEmergencyUpdateRef.current(data),
       (status) => setConnectionStatus(status)
     );
     return () => disconnect();
   }, []);
+
+  const triggerEmergency = () => {
+    if (!currentUser) return;
+    
+    const now = new Date();
+    const newAlert: EmergencyAlert = {
+      id: `EMG-${Date.now()}`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: userRole as 'student' | 'driver',
+      timestamp: now.getTime(),
+      date: now.toLocaleDateString(),
+      time: now.toLocaleTimeString(),
+      location: userLocation ? { lat: userLocation[0], lng: userLocation[1] } : undefined
+    };
+    
+    setEmergencyAlerts(prev => [newAlert, ...prev]);
+    publishEmergency(newAlert);
+    window.alert("Emergency alert sent to admin!");
+  };
 
   // 4. Admin Broadcasting (Sending ALL Data)
   const handleAdminUpdate = (
@@ -399,17 +439,19 @@ const App: React.FC = () => {
           onSwitchRoute={handleRouteSwitch}
         />;
       case 'CHAT':
-        return <AIChatbot />;
+        return <AIChatbot onEmergency={triggerEmergency} />;
       case 'ADMIN':
         return <AdminDashboard 
           routes={routes} 
           buses={buses} 
           drivers={drivers}
           students={students}
+          emergencyAlerts={emergencyAlerts}
           onUpdateRoutes={(d) => handleAdminUpdate('routes', d)} 
           onUpdateBuses={(d) => handleAdminUpdate('buses', d)} 
           onUpdateDrivers={(d) => handleAdminUpdate('drivers', d)}
           onUpdateStudents={(d) => handleAdminUpdate('students', d)}
+          onUpdateEmergencyAlerts={setEmergencyAlerts}
           onLogout={handleLogout} 
           userLocation={userLocation} 
           onResetData={resetAllData}
@@ -419,6 +461,7 @@ const App: React.FC = () => {
           driver={currentUser}
           bus={buses.find(b => b.driverId === currentUser?.id)}
           route={activeRoute} 
+          onEmergency={triggerEmergency}
           onLogout={handleLogout} 
         />;
       case 'PROFILE':
@@ -451,7 +494,7 @@ const App: React.FC = () => {
         <LoginPage onLogin={handleLogin} />
       ) : (
         <>
-          <main className="flex-1 relative overflow-hidden">
+          <main className="flex-1 relative overflow-hidden flex flex-col">
              {/* Connection Status Toast */}
              <AnimatePresence>
               {connectionStatus !== 'CONNECTED' && (
@@ -466,18 +509,44 @@ const App: React.FC = () => {
 
             <AnimatePresence>
               {gpsError && (
-                <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-20 left-4 right-4 z-[3000]">
-                  <div className="bg-white p-5 rounded-3xl shadow-2xl border border-red-50 flex items-center gap-4">
+                <motion.div 
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  onDragEnd={(_, info) => {
+                    if (Math.abs(info.offset.x) > 100) {
+                      setGpsError(null);
+                    }
+                  }}
+                  initial={{ y: -50, opacity: 0 }} 
+                  animate={{ y: 0, opacity: 1 }} 
+                  exit={{ y: -50, opacity: 0 }} 
+                  className="absolute top-20 left-4 right-4 z-[3000] cursor-grab active:cursor-grabbing"
+                >
+                  <div className="bg-white p-5 rounded-3xl shadow-2xl border border-red-50 flex items-center gap-4 select-none">
                     <RefreshCw className="w-5 h-5 text-red-500 cursor-pointer hover:rotate-180 transition-transform duration-500" onClick={handleReloadGps} />
                     <div className="flex-1 text-sm font-bold text-slate-900">{gpsError.message}</div>
+                    <div className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Swipe to clear</div>
                   </div>
                 </motion.div>
               )}
                {isCloudSyncing && (
-                <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-20 left-4 right-4 z-[3000]">
-                  <div className="bg-blue-500 p-5 rounded-3xl shadow-2xl border border-blue-400 flex items-center gap-4">
+                <motion.div 
+                  drag="x"
+                  dragConstraints={{ left: 0, right: 0 }}
+                  onDragEnd={(_, info) => {
+                    if (Math.abs(info.offset.x) > 100) {
+                      setIsCloudSyncing(false);
+                    }
+                  }}
+                  initial={{ y: -50, opacity: 0 }} 
+                  animate={{ y: 0, opacity: 1 }} 
+                  exit={{ y: -50, opacity: 0 }} 
+                  className="absolute top-20 left-4 right-4 z-[3000] cursor-grab active:cursor-grabbing"
+                >
+                  <div className="bg-blue-500 p-5 rounded-3xl shadow-2xl border border-blue-400 flex items-center gap-4 select-none">
                     <CloudLightning className="w-5 h-5 text-white animate-pulse" />
                     <div className="flex-1 text-sm font-bold text-white">Updating App Data...</div>
+                    <div className="text-[10px] text-blue-200 font-bold uppercase tracking-widest">Swipe to clear</div>
                   </div>
                 </motion.div>
               )}

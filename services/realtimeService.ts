@@ -1,5 +1,5 @@
 import mqtt from 'mqtt';
-import { BusRoute, Bus, Driver, Student } from '../types';
+import { BusRoute, Bus, Driver, Student, EmergencyAlert } from '../types';
 
 // Public EMQX Broker (More stable on mobile networks/4G than HiveMQ)
 // Port 8084 is WSS (Secure WebSocket)
@@ -9,6 +9,7 @@ const BROKER_URL = 'wss://broker.emqx.io:8084/mqtt';
 const TOPIC_BASE = 'college-bus-tracker/v4';
 const TOPIC_CONFIG = `${TOPIC_BASE}/config`; // Global app config (Routes + Users)
 const TOPIC_UPDATES_WILDCARD = `${TOPIC_BASE}/updates/+`; // Listen to ALL live positions
+const TOPIC_EMERGENCY = `${TOPIC_BASE}/emergency`; // Emergency alerts
 
 let client: mqtt.MqttClient | null = null;
 
@@ -33,6 +34,7 @@ export interface GlobalConfigPayload {
 export const connectToRealtime = (
   onBusUpdate: (data: BusUpdatePayload) => void,
   onConfigUpdate: (data: GlobalConfigPayload) => void,
+  onEmergencyUpdate: (data: EmergencyAlert) => void,
   onStatusChange?: (status: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void
 ) => {
   // If already connected, do not create a new client
@@ -59,8 +61,8 @@ export const connectToRealtime = (
     console.log('✅ Connected to EMQX Cloud Broker');
     if (onStatusChange) onStatusChange('CONNECTED');
     
-    // Subscribe to Wildcard Updates and Config
-    client?.subscribe([TOPIC_UPDATES_WILDCARD, TOPIC_CONFIG], { qos: 1 }, (err) => {
+    // Subscribe to Wildcard Updates, Config, and Emergency
+    client?.subscribe([TOPIC_UPDATES_WILDCARD, TOPIC_CONFIG, TOPIC_EMERGENCY], { qos: 1 }, (err) => {
       if (err) console.error('Subscription error:', err);
       else console.log('📡 Listening for global updates...');
     });
@@ -91,6 +93,11 @@ export const connectToRealtime = (
         const data = JSON.parse(msgString) as GlobalConfigPayload;
         console.log("🔄 Received Global Data Sync");
         onConfigUpdate(data);
+      }
+      else if (topic === TOPIC_EMERGENCY) {
+        const data = JSON.parse(msgString) as EmergencyAlert;
+        console.log("🚨 EMERGENCY ALERT RECEIVED");
+        onEmergencyUpdate(data);
       }
     } catch (e) {
       console.warn('Failed to parse incoming message', e);
@@ -137,5 +144,15 @@ export const publishGlobalConfig = (data: Omit<GlobalConfigPayload, 'timestamp'>
     };
     console.log("☁️ Syncing Global Data to Cloud...");
     client.publish(TOPIC_CONFIG, JSON.stringify(payload), { qos: 1, retain: true });
+  }
+};
+
+/**
+ * Broadcasts Emergency Alert.
+ */
+export const publishEmergency = (data: EmergencyAlert) => {
+  if (client && client.connected) {
+    console.log("🚨 Publishing Emergency Alert...");
+    client.publish(TOPIC_EMERGENCY, JSON.stringify(data), { qos: 1 });
   }
 };

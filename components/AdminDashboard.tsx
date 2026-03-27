@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, Edit3, Trash2, X, Map as MapIcon, LogOut, Bus as BusIcon, User as UserIcon, Save, MapPin, Type, Truck, ChevronRight, Check, Navigation, GraduationCap, MapPinPlus, Waypoints, Search, Phone, Hash, RefreshCcw } from 'lucide-react';
-import { BusRoute, BusStop, Bus, Driver, Student } from '../types.ts';
+import { Plus, Edit3, Trash2, X, Map as MapIcon, LogOut, Bus as BusIcon, User as UserIcon, Save, MapPin, Type, Truck, ChevronRight, Check, Navigation, GraduationCap, MapPinPlus, Waypoints, Search, Phone, Hash, RefreshCcw, AlertTriangle, Clock, Calendar } from 'lucide-react';
+import { BusRoute, BusStop, Bus, Driver, Student, EmergencyAlert } from '../types.ts';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as maplibregl from 'maplibre-gl';
 
@@ -9,10 +9,12 @@ interface AdminDashboardProps {
   buses: Bus[];
   drivers: Driver[];
   students: Student[];
+  emergencyAlerts: EmergencyAlert[];
   onUpdateRoutes: (routes: BusRoute[]) => void;
   onUpdateBuses: (buses: Bus[]) => void;
   onUpdateDrivers: (drivers: Driver[]) => void;
   onUpdateStudents: (students: Student[]) => void;
+  onUpdateEmergencyAlerts: (alerts: EmergencyAlert[]) => void;
   onLogout?: () => void;
   onResetData?: () => void;
   userLocation: [number, number] | null;
@@ -28,12 +30,12 @@ const BRANCHES = [
   'Apparel Design and Fashion Technology'
 ];
 
-type AdminTab = 'overview' | 'route' | 'bus' | 'driver' | 'student';
+type AdminTab = 'overview' | 'route' | 'bus' | 'driver' | 'student' | 'emergency';
 type EditorTab = 'NAME' | 'OSRM' | 'STOPS' | 'BUS';
 
 export default function AdminDashboard({ 
-  routes, buses, drivers, students, 
-  onUpdateRoutes, onUpdateBuses, onUpdateDrivers, onUpdateStudents, 
+  routes, buses, drivers, students, emergencyAlerts,
+  onUpdateRoutes, onUpdateBuses, onUpdateDrivers, onUpdateStudents, onUpdateEmergencyAlerts,
   onLogout, onResetData,
   userLocation
 }: AdminDashboardProps) {
@@ -283,7 +285,7 @@ export default function AdminDashboard({
     if (editingRouteId) {
       onUpdateRoutes(routes.map(r => r.id === editingRouteId ? { ...r, ...updatedData } : r));
     } else {
-      onUpdateRoutes([...routes, { id: `R-${Date.now()}`, ...updatedData as BusRoute, isLive: false, liveLat: tempStops[0]?.lat || TIPTUR_LNG_LAT[1], liveLng: tempStops[0]?.lng || TIPTUR_LNG_LAT[0] }]);
+      onUpdateRoutes([...routes, { ...updatedData as BusRoute, id: `R-${Date.now()}`, isLive: false, liveLat: tempStops[0]?.lat || TIPTUR_LNG_LAT[1], liveLng: tempStops[0]?.lng || TIPTUR_LNG_LAT[0] }]);
     }
     setIsEditing(false);
   };
@@ -342,9 +344,12 @@ export default function AdminDashboard({
             </div>
           </div>
           <div className="flex p-1 bg-slate-100 rounded-2xl items-center overflow-x-auto no-scrollbar gap-1">
-            {['overview', 'route', 'bus', 'driver', 'student'].map((tab) => (
+            {['overview', 'route', 'bus', 'driver', 'student', 'emergency'].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-5 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all whitespace-nowrap ${activeTab === tab ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
                 {tab}
+                {tab === 'emergency' && emergencyAlerts.length > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 bg-red-500 text-white text-[8px] rounded-full animate-pulse">{emergencyAlerts.length}</span>
+                )}
               </button>
             ))}
           </div>
@@ -428,6 +433,75 @@ export default function AdminDashboard({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {!isEditing && activeTab === 'emergency' && (
+          <div className="p-6 space-y-4">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Emergency Alerts</h3>
+              {emergencyAlerts.length > 0 && (
+                <button 
+                  onClick={() => onUpdateEmergencyAlerts([])}
+                  className="text-[9px] font-black text-red-500 uppercase tracking-widest hover:underline"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+            
+            {emergencyAlerts.length === 0 ? (
+              <div className="bg-white p-12 rounded-[2.5rem] border border-slate-100 text-center">
+                <div className="w-16 h-16 bg-green-50 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                  <Check className="w-8 h-8 text-green-500" />
+                </div>
+                <p className="text-slate-900 font-black">No active emergencies</p>
+                <p className="text-slate-400 text-xs mt-1">System is monitoring all routes</p>
+              </div>
+            ) : (
+              emergencyAlerts.map(alert => (
+                <div key={alert.id} className="bg-white p-6 rounded-[2.5rem] border-2 border-red-100 shadow-xl shadow-red-50/50 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-red-50 rounded-full -mr-12 -mt-12 blur-2xl" />
+                  
+                  <div className="flex items-start gap-5 relative">
+                    <div className="p-4 bg-red-500 rounded-2xl shadow-lg shadow-red-200">
+                      <AlertTriangle className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-0.5">Emergency Alert</p>
+                          <h4 className="text-lg font-black text-slate-900">{alert.userName}</h4>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${alert.userRole === 'driver' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {alert.userRole}
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mt-6">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-600">{alert.time}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-600">{alert.date}</span>
+                        </div>
+                      </div>
+
+                      {alert.location && (
+                        <div className="mt-4 p-3 bg-slate-50 rounded-xl flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-600">
+                            {alert.location.lat.toFixed(4)}, {alert.location.lng.toFixed(4)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

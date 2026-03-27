@@ -65,4 +65,15 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export interface EmergencyAlert {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: 'student' | 'driver';
+  timestamp: number;
+  date: string;
+  time: string;
+  location?: { lat: number; lng: number };
+}
+
 export type ViewState = 'TRACKING' | 'CHAT' | 'ADMIN' | 'PROFILE' | 'DRIVER' | 'SCAN';
