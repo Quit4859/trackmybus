@@ -359,6 +359,48 @@ export default function AdminDashboard({
       <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
         {!isEditing && activeTab === 'overview' && (
           <div className="p-6 space-y-6">
+            {emergencyAlerts.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
+                    <h3 className="text-[10px] font-black text-red-500 uppercase tracking-widest">Active Emergencies</h3>
+                  </div>
+                  <button 
+                    onClick={() => setActiveTab('emergency')}
+                    className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900"
+                  >
+                    View All
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {emergencyAlerts.slice(0, 2).map(alert => (
+                    <div key={alert.id} className="bg-red-50 border border-red-100 p-4 rounded-3xl flex items-center justify-between shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-red-500 p-2 rounded-xl">
+                          <AlertTriangle className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-900">{alert.userName}</p>
+                          <p className="text-[9px] font-bold text-red-600 uppercase tracking-widest">{alert.userRole} • {alert.time}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => onUpdateEmergencyAlerts(emergencyAlerts.filter(a => a.id !== alert.id))}
+                        className="p-2 bg-white rounded-xl text-red-500 shadow-sm active:scale-90 transition-transform"
+                        title="Clear Alert"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {emergencyAlerts.length > 2 && (
+                    <p className="text-center text-[9px] font-black text-slate-400 uppercase tracking-widest">+{emergencyAlerts.length - 2} more alerts</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div ref={overviewMapContainerRef} className="w-full h-80 rounded-[2.5rem] bg-slate-900 border-4 border-white shadow-2xl overflow-hidden" />
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Drivers</p><p className="text-3xl font-black text-slate-900">{drivers.length}</p></div>
