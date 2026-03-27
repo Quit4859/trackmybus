@@ -93,6 +93,7 @@ const App: React.FC = () => {
   const [userHeading, setUserHeading] = useState<number>(0);
   const [gpsError, setGpsError] = useState<{ message: string; code: number; details?: string } | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [showEmergencyConfirmation, setShowEmergencyConfirmation] = useState(false);
 
   // Persistence Saving - Local
   useEffect(() => { localStorage.setItem('bus_routes', JSON.stringify(routes)); }, [routes]);
@@ -207,7 +208,9 @@ const App: React.FC = () => {
     
     setEmergencyAlerts(prev => [newAlert, ...prev]);
     publishEmergency(newAlert);
-    window.alert("Emergency alert sent to admin!");
+    setShowEmergencyConfirmation(true);
+    // Auto-hide after 8 seconds to give user time to read
+    setTimeout(() => setShowEmergencyConfirmation(false), 8000);
   };
 
   // 4. Admin Broadcasting (Sending ALL Data)
@@ -547,6 +550,31 @@ const App: React.FC = () => {
                     <CloudLightning className="w-5 h-5 text-white animate-pulse" />
                     <div className="flex-1 text-sm font-bold text-white">Updating App Data...</div>
                     <div className="text-[10px] text-blue-200 font-bold uppercase tracking-widest">Swipe to clear</div>
+                  </div>
+                </motion.div>
+              )}
+              {showEmergencyConfirmation && (
+                <motion.div 
+                  initial={{ scale: 0.8, opacity: 0, y: 20 }} 
+                  animate={{ scale: 1, opacity: 1, y: 0 }} 
+                  exit={{ scale: 0.8, opacity: 0, y: 20 }} 
+                  className="absolute inset-0 z-[5000] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+                >
+                  <div className="bg-white p-8 rounded-[3rem] shadow-2xl border border-red-100 flex flex-col items-center text-center max-w-xs">
+                    <div className="w-20 h-20 bg-red-500 rounded-3xl flex items-center justify-center mb-6 shadow-lg shadow-red-200 animate-pulse">
+                      <AlertTriangle className="w-10 h-10 text-white" />
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">Help is on the way!</h2>
+                    <p className="text-slate-500 text-sm font-bold leading-relaxed mb-6">
+                      Your emergency alert has been <span className="text-red-600">sent to the Administrator</span>. 
+                      Please stay calm and wait for assistance.
+                    </p>
+                    <button 
+                      onClick={() => setShowEmergencyConfirmation(false)}
+                      className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-transform"
+                    >
+                      I Understand
+                    </button>
                   </div>
                 </motion.div>
               )}
