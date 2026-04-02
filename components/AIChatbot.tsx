@@ -13,7 +13,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
     {
       id: 'welcome',
       sender: 'bot',
-      text: 'Hi! I am your CollegeBus Assistant. Ask me about schedules, routes, or lost items!',
+      text: 'Hi! I am your College Bus Tracker Assistant. Ask me about schedules, routes, or lost items!',
       timestamp: new Date()
     }
   ]);

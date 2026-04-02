@@ -33,7 +33,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       <div className="w-full max-w-md z-10">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center mb-8">
           <div className="w-20 h-20 bg-yellow-400 rounded-3xl flex items-center justify-center shadow-2xl mb-4 rotate-3"><Bus className="w-10 h-10 text-slate-900" /></div>
-          <h1 className="text-3xl font-black text-white">CollegeBus <span className="text-yellow-400">Tracker</span></h1>
+          <h1 className="text-3xl font-black text-white text-center leading-tight">College Bus <span className="text-yellow-400">Tracker</span></h1>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white/10 backdrop-blur-2xl rounded-[3rem] p-10 shadow-2xl border border-white/10">

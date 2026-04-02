@@ -1,5 +1,5 @@
 {
-  "name": "CollegeBus Tracker",
+  "name": "College Bus Tracker",
   "description": "Real-time college bus tracking, AI support, and route management inspired by modern commute apps.",
   "requestFramePermissions": [
     "camera",

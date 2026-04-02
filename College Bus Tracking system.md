@@ -1,4 +1,4 @@
-# 🚍 College Bus Tracker
+# 🚍 CollegeBus Tracker
 
 ### *Stop wondering. Start tracking.*
 
@@ -11,7 +11,7 @@
 
 > **"Are you tired of standing at the bus stop wondering where the bus is?"**
 >
-> College Bus Tracker eliminates "Last-Mile Uncertainty" for students and admins through real-time telemetry, 3D spatial visualization, and multimodal AI assistance.
+> CollegeBus Tracker eliminates "Last-Mile Uncertainty" for students and admins through real-time telemetry, 3D spatial visualization, and multimodal AI assistance.
 
 ---
 
