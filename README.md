@@ -87,6 +87,17 @@ graph TD
 
 ---
 
+## 📸 Screenshots
+
+<div align="center">
+  <img src="./screenshots/img01.jpeg" width="400" alt="Login Screen" />
+  <img src="./screenshots/img02.jpeg" width="400" alt="Dashboard" />
+  <img src="./screenshots/img03.jpeg" width="400" alt="Tracking View" />
+  <img src="./screenshots/img04.jpeg" width="400" alt="AI Assistant" />
+</div>
+
+---
+
 ## 🔐 Demo Access
 
 Explore the platform using these pre-configured accounts:
