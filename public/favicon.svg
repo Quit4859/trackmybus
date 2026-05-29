@@ -2,7 +2,7 @@
   <!-- Yellow background with rounded corners -->
   <rect width="512" height="512" rx="140" fill="#FBBF24"/>
   <!-- The dark bus icon centered -->
-  <g transform="translate(106, 120) scale(12.5)" stroke="#0F172A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+  <g transform="translate(106, 106) scale(12.5)" stroke="#0F172A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none">
     <path d="M8 6v6"></path>
     <path d="M15 6v6"></path>
     <path d="M2 12h19.6"></path>

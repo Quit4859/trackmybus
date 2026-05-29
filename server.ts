@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
@@ -114,6 +115,41 @@ Keep the response structured and actionable.`;
       });
     }
   });
+
+  // Self-healing asset copy: ensure public/srcimg and dist/srcimg exist and contain screenshot assets for SEO
+  try {
+    const screenshotsDir = path.join(process.cwd(), "screenshots");
+    if (fs.existsSync(screenshotsDir)) {
+      const files = fs.readdirSync(screenshotsDir);
+      
+      // Copy to public/srcimg
+      const publicSrcimgDir = path.join(process.cwd(), "public", "srcimg");
+      if (!fs.existsSync(publicSrcimgDir)) {
+        fs.mkdirSync(publicSrcimgDir, { recursive: true });
+      }
+      
+      // Copy to dist/srcimg (exists if build has run)
+      const distPath = path.join(process.cwd(), "dist");
+      const distSrcimgDir = path.join(distPath, "srcimg");
+      if (fs.existsSync(distPath) && !fs.existsSync(distSrcimgDir)) {
+        fs.mkdirSync(distSrcimgDir, { recursive: true });
+      }
+
+      for (const file of files) {
+        if (file.endsWith(".jpeg") || file.endsWith(".jpg") || file.endsWith(".png")) {
+          // Sync public
+          fs.copyFileSync(path.join(screenshotsDir, file), path.join(publicSrcimgDir, file));
+          // Sync dist
+          if (fs.existsSync(distPath)) {
+            fs.copyFileSync(path.join(screenshotsDir, file), path.join(distSrcimgDir, file));
+          }
+        }
+      }
+      console.log("Successfully synchronised SEO screenshots/srcimg assets.");
+    }
+  } catch (err) {
+    console.warn("Asset sync warning:", err);
+  }
 
   // Vite Middleware Setup
   if (process.env.NODE_ENV !== "production") {
