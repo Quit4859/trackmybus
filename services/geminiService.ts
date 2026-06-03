@@ -28,7 +28,16 @@ export const sendChatMessage = async (
     });
 
     if (!response.ok) {
-      throw new Error(`Server returned HTTP ${response.status}`);
+      let errMsg = `Server returned HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        if (errorData?.details) {
+          errMsg = `${errMsg}: ${errorData.details}`;
+        } else if (errorData?.error) {
+          errMsg = `${errMsg}: ${errorData.error}`;
+        }
+      } catch {}
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
@@ -54,7 +63,16 @@ export const analyzeImage = async (base64Image: string, prompt: string): Promise
     });
 
     if (!response.ok) {
-      throw new Error(`Server returned HTTP ${response.status}`);
+      let errMsg = `Server returned HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        if (errorData?.details) {
+          errMsg = `${errMsg}: ${errorData.details}`;
+        } else if (errorData?.error) {
+          errMsg = `${errMsg}: ${errorData.error}`;
+        }
+      } catch {}
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
