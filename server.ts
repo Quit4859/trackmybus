@@ -12,6 +12,16 @@ async function startServer() {
   app.use(express.json({ limit: "15mb" }));
   app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
+  // SEO Redirection Middleware: 301 Redirect non-www (bustracker.tech) to canonical www (www.bustracker.tech)
+  app.use((req, res, next) => {
+    const host = req.headers.host || "";
+    const hostname = host.split(":")[0].toLowerCase();
+    if (hostname === "bustracker.tech") {
+      return res.redirect(301, `https://www.bustracker.tech${req.originalUrl}`);
+    }
+    next();
+  });
+
   // Initialize secure Gemini API via lazy initialization on the server side
   let aiClient: GoogleGenAI | null = null;
   function getGeminiClient(): GoogleGenAI {
