@@ -13,18 +13,14 @@ const isNetworkError = (error: any): boolean => {
   );
 };
 
-export const sendChatMessage = async (
-  message: string, 
-  history: { sender: 'user' | 'bot', text: string }[],
-  appContext?: { routes: any[]; buses: any[] }
-): Promise<string> => {
+export const sendChatMessage = async (message: string, history: { sender: 'user' | 'bot', text: string }[]): Promise<string> => {
   try {
     const response = await fetch("/api/gemini/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, history, appContext }),
+      body: JSON.stringify({ message, history }),
     });
 
     if (!response.ok) {
