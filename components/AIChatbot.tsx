@@ -81,6 +81,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency, routes = [], buses =
               <BotIcon className="w-6 h-6 text-yellow-500" />
               Bus Assistant
             </h2>
+            <p className="text-xs text-slate-500 font-medium">Powered by Gemini AI</p>
           </div>
           {onEmergency && (
             <button 
