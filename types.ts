@@ -56,6 +56,8 @@ export interface BusRoute {
   isLive?: boolean; // Tracking status
   busId?: string;
   heading?: number;
+  direction?: 'morning' | 'evening';
+  eveningTimes?: Record<string, string>;
 }
 
 export interface ChatMessage {

@@ -41,16 +41,38 @@ const INITIAL_ROUTES: BusRoute[] = [
     busId: 'B-1',
     eta: '12 mins',
     isLive: false,
+    direction: 'morning',
+    eveningTimes: {
+      '1': '05:00 PM',
+      '2': '04:55 PM',
+      '3': '04:50 PM',
+      '4': '04:45 PM',
+      '5': '04:40 PM',
+      '6': '04:35 PM',
+      '7': '04:30 PM'
+    },
     stops: [
       { id: '1', name: 'Tiptur Railway Station', time: '07:30 AM', status: 'passed', lat: 13.2642, lng: 76.4764 },
-      { id: '2', name: 'Main Road Circle', time: '07:45 AM', status: 'passed', lat: 13.2680, lng: 76.4820 },
-      { id: '3', name: 'Science Block Gate', time: '07:55 AM', status: 'current', lat: 13.2720, lng: 76.4880 },
+      { id: '2', name: 'KSRTC Bus Stand', time: '07:35 AM', status: 'passed', lat: 13.2655, lng: 76.4785 },
+      { id: '3', name: 'Koppa Circle', time: '07:40 AM', status: 'passed', lat: 13.2668, lng: 76.4802 },
+      { id: '4', name: 'Post Office Junction', time: '07:45 AM', status: 'passed', lat: 13.2682, lng: 76.4827 },
+      { id: '5', name: 'Gandhi Nagar Main', time: '07:50 AM', status: 'current', lat: 13.2698, lng: 76.4849 },
+      { id: '6', name: 'Science Block Gate', time: '07:55 AM', status: 'upcoming', lat: 13.2720, lng: 76.4880 },
+      { id: '7', name: 'Main Campus Terminal', time: '08:00 AM', status: 'upcoming', lat: 13.2735, lng: 76.4905 },
     ],
-    path: [[76.4764, 13.2642], [76.4820, 13.2680], [76.4880, 13.2720]],
-    liveLat: 13.2720,
-    liveLng: 76.4880,
-    actualLat: 13.2720,
-    actualLng: 76.4880,
+    path: [
+      [76.4764, 13.2642],
+      [76.4785, 13.2655],
+      [76.4802, 13.2668],
+      [76.4827, 13.2682],
+      [76.4849, 13.2698],
+      [76.4880, 13.2720],
+      [76.4905, 13.2735]
+    ],
+    liveLat: 13.2698,
+    liveLng: 76.4849,
+    actualLat: 13.2698,
+    actualLng: 76.4849,
     heading: 0
   }
 ];
@@ -62,6 +84,20 @@ const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'driver'>('student');
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING'>('DISCONNECTED');
+  const [showConnectionToast, setShowConnectionToast] = useState(true);
+
+  // Auto-dismiss Connection Status Toast after 5 seconds to prevent persistent offline warning
+  useEffect(() => {
+    if (connectionStatus !== 'CONNECTED') {
+      setShowConnectionToast(true);
+      const timer = setTimeout(() => {
+        setShowConnectionToast(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowConnectionToast(false);
+    }
+  }, [connectionStatus]);
   
   // Persistence Loading
   const loadStored = <T,>(key: string, fallback: T): T => {
@@ -101,6 +137,15 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bus_drivers', JSON.stringify(drivers)); }, [drivers]);
   useEffect(() => { localStorage.setItem('bus_students', JSON.stringify(students)); }, [students]);
   useEffect(() => { localStorage.setItem('emergency_alerts', JSON.stringify(emergencyAlerts)); }, [emergencyAlerts]);
+
+  // --- Auto Upgrade/Sync Migration ---
+  useEffect(() => {
+    const r101 = routes.find(r => r.id === 'R-101');
+    if (r101 && (r101.stops.length === 3 || !r101.eveningTimes)) {
+      console.log("Upgraded stale R-101 in local storage to 7-stops route with evening times!");
+      setRoutes(INITIAL_ROUTES);
+    }
+  }, []);
 
   // --- Automatic Route Assignment Logic ---
   useEffect(() => {
@@ -440,6 +485,11 @@ const App: React.FC = () => {
           onToggleTracking={handleToggleTracking}
           onLogout={handleLogout}
           onSwitchRoute={handleRouteSwitch}
+          onToggleDirection={(dir) => {
+            if (activeRoute) {
+              setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
+            }
+          }}
         />;
       case 'CHAT':
         return <AIChatbot onEmergency={triggerEmergency} />;
@@ -466,6 +516,11 @@ const App: React.FC = () => {
           route={activeRoute} 
           onEmergency={triggerEmergency}
           onLogout={handleLogout} 
+          onToggleDirection={(dir) => {
+            if (activeRoute) {
+              setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
+            }
+          }}
         />;
       case 'PROFILE':
         return (
@@ -484,7 +539,18 @@ const App: React.FC = () => {
           </div>
         );
       default:
-        return <MapInterface route={activeRoute} userLocation={userLocation} userRole={userRole} onToggleTracking={handleToggleTracking} onLogout={handleLogout} />;
+        return <MapInterface 
+          route={activeRoute} 
+          userLocation={userLocation} 
+          userRole={userRole} 
+          onToggleTracking={handleToggleTracking} 
+          onLogout={handleLogout}
+          onToggleDirection={(dir) => {
+            if (activeRoute) {
+              setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
+            }
+          }}
+        />;
     }
   };
 
@@ -500,7 +566,7 @@ const App: React.FC = () => {
           <main className="flex-1 relative overflow-hidden flex flex-col">
              {/* Connection Status Toast */}
              <AnimatePresence>
-              {connectionStatus !== 'CONNECTED' && (
+              {connectionStatus !== 'CONNECTED' && showConnectionToast && (
                  <motion.div initial={{ y: -50 }} animate={{ y: 0 }} exit={{ y: -50 }} className="absolute top-4 left-0 right-0 flex justify-center z-[4000]">
                     <div className="bg-slate-900/90 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg">
                        {connectionStatus === 'DISCONNECTED' ? <WifiOff className="w-3 h-3 text-red-400" /> : <Wifi className="w-3 h-3 text-yellow-400 animate-pulse" />}

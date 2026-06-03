@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BusRoute } from '../types.ts';
-import { Phone, ShieldAlert, Clock, Bus, UserCircle, Crosshair, MapPin, Power, Navigation, SignalHigh, Eye, EyeOff, LogOut, Navigation2, Compass, ChevronLeft, ChevronRight, Lock, LockOpen } from 'lucide-react';
+import { Phone, ShieldAlert, Clock, Bus, UserCircle, Crosshair, MapPin, Power, Navigation, SignalHigh, Eye, EyeOff, LogOut, Navigation2, Compass, ChevronLeft, ChevronRight, Lock, LockOpen, Sun, Moon } from 'lucide-react';
 import * as maplibregl from 'maplibre-gl';
 import { motion, useAnimation, PanInfo, AnimatePresence } from 'framer-motion';
 
@@ -11,9 +11,10 @@ interface MapInterfaceProps {
   onToggleTracking?: (status: boolean) => void;
   onLogout?: () => void;
   onSwitchRoute?: (direction: 'next' | 'prev') => void;
+  onToggleDirection?: (direction: 'morning' | 'evening') => void;
 }
 
-const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRole, onToggleTracking, onLogout, onSwitchRoute }) => {
+const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRole, onToggleTracking, onLogout, onSwitchRoute, onToggleDirection }) => {
   const [isLoading, setIsLoading] = useState(true);
   // centerTarget: 'bus' = locked on bus, 'user' = locked on user, null = free roaming
   const [centerTarget, setCenterTarget] = useState<'bus' | 'user' | null>('bus');
@@ -33,8 +34,18 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   const targetBusPos = useRef<[number, number] | null>(null);
   const animationFrameRef = useRef<number>(0);
 
-  const currentStopIndex = route.stops.findIndex(s => s.status === 'current');
-  const activeIndex = currentStopIndex !== -1 ? currentStopIndex : 0;
+   const isEvening = route.direction === 'evening';
+   const displayedStops = isEvening 
+     ? [...route.stops].reverse().map(stop => ({
+         ...stop,
+         time: route.eveningTimes?.[stop.id] || stop.time
+       }))
+     : route.stops;
+
+   const displayedPath = isEvening && route.path ? [...route.path].reverse() : route.path;
+
+   const currentStopIndex = displayedStops.findIndex(s => s.status === 'current');
+   const activeIndex = currentStopIndex !== -1 ? currentStopIndex : 0;
   
   const DEFAULT_LNG_LAT: [number, number] = [76.4764, 13.2642];
 
@@ -154,10 +165,10 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         }
       });
 
-      if (route.path && route.path.length > 0) {
+      if (displayedPath && displayedPath.length > 0) {
         map.addSource('bus-path', {
           type: 'geojson',
-          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: route.path } }
+          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: displayedPath } }
         });
         map.addLayer({
           id: 'bus-path-glow',
@@ -226,22 +237,22 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   // Update Route Path when route changes
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.getStyle() || !route.path) return;
+    if (!map || !map.getStyle() || !displayedPath) return;
 
     const source = map.getSource('bus-path') as maplibregl.GeoJSONSource;
     if (source) {
         source.setData({ 
             type: 'Feature', 
             properties: {}, 
-            geometry: { type: 'LineString', coordinates: route.path } 
+            geometry: { type: 'LineString', coordinates: displayedPath } 
         });
     }
     updateStopMarkers(map);
-  }, [route.id, route.path]); 
+  }, [route.id, displayedPath]); 
 
   const updateStopMarkers = (mapInstance: maplibregl.Map) => {
     stopMarkersRef.current.forEach(m => m.remove());
-    stopMarkersRef.current = route.stops.map((stop, idx) => {
+    stopMarkersRef.current = displayedStops.map((stop, idx) => {
       const el = document.createElement('div');
       el.className = `w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-[9px] font-black text-white ${stop.status === 'passed' ? 'bg-slate-400' : stop.status === 'current' ? 'bg-yellow-500 ring-4 ring-yellow-500/20' : 'bg-blue-500'}`;
       el.innerText = (idx + 1).toString();
@@ -498,7 +509,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
             </div>
             <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{route.isLive ? 'Live' : 'Stationary'}</p>
-                <p className="font-extrabold text-slate-900 text-sm leading-none truncate max-w-[150px]">{route.name}</p>
+                <p className="font-extrabold text-slate-900 text-sm leading-none truncate max-w-[150px] sm:max-w-[200px] lg:max-w-none">{route.name}</p>
             </div>
             {userRole !== 'driver' && onSwitchRoute && (
                 <button onClick={() => onSwitchRoute('next')} className="p-1 rounded-full hover:bg-slate-100 active:scale-90"><ChevronRight className="w-4 h-4 text-slate-400" /></button>
@@ -562,6 +573,40 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                   <p className="text-slate-500 text-xs font-bold uppercase tracking-widest leading-tight">Broadcasting on: <span className="text-white">{route.name}</span></p>
                 </div>
               </div>
+
+              {onToggleDirection && (
+                <div className="flex flex-col gap-2 bg-white/5 p-3 rounded-2xl border border-white/5">
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Select Active Shift</span>
+                    <span className="text-[9px] font-black text-yellow-400 uppercase tracking-widest block">
+                      {route.direction === 'evening' ? 'Evening Trip' : 'Morning Trip'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 bg-black/40 p-1 rounded-xl">
+                    <button
+                      onClick={() => onToggleDirection('morning')}
+                      className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                        (!route.direction || route.direction === 'morning')
+                          ? 'bg-yellow-400 text-slate-900 font-black'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Sun className="w-3 h-3" /> Morning
+                    </button>
+                    <button
+                      onClick={() => onToggleDirection('evening')}
+                      className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                        route.direction === 'evening'
+                          ? 'bg-yellow-400 text-slate-900 font-black'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Moon className="w-3 h-3" /> Evening
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <button 
                 onClick={() => onToggleTracking?.(!route.isLive)} 
                 className={`w-full py-5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all active:scale-95 ${route.isLive ? 'bg-red-500 text-white' : 'bg-yellow-400 text-slate-900'}`}
@@ -614,10 +659,10 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Route Schedule</h3>
                     <div className="relative pl-6 space-y-8">
                         <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                        {route.stops.slice(activeIndex, activeIndex + 3).map((stop) => (
+                        {route.stops.map((stop) => (
                             <div key={stop.id} className="relative flex items-center justify-between">
-                                <div className={`absolute -left-[23px] w-4 h-4 rounded-full border-4 border-white shadow-sm ${stop.status === 'current' ? 'bg-yellow-400 ring-8 ring-yellow-400/10' : 'bg-slate-200'}`} />
-                                <span className={`text-sm font-bold ${stop.status === 'current' ? 'text-slate-900' : 'text-slate-400'}`}>{stop.name}</span>
+                                <div className={`absolute -left-[23px] w-4 h-4 rounded-full border-4 border-white shadow-sm ${stop.status === 'current' ? 'bg-yellow-400 ring-8 ring-yellow-400/10' : stop.status === 'passed' ? 'bg-slate-300' : 'bg-slate-200'}`} />
+                                <span className={`text-sm font-bold ${stop.status === 'current' ? 'text-slate-900' : stop.status === 'passed' ? 'text-slate-400 line-through decoration-slate-200' : 'text-slate-500'}`}>{stop.name}</span>
                                 <span className="text-xs font-black text-slate-300 font-mono">{stop.time}</span>
                             </div>
                         ))}
@@ -636,7 +681,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                             setSnapPoint(COLLAPSED_Y);
                             controls.start({ y: COLLAPSED_Y });
                         }}
-                        className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[50] bg-slate-900 text-white px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-transform"
+                        className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[50] bg-slate-900 text-white px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-transform lg:bottom-6 lg:left-6 lg:translate-x-0"
                     >
                         <Bus className="w-4 h-4" /> View Route
                     </motion.button>

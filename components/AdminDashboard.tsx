@@ -46,6 +46,8 @@ export default function AdminDashboard({
   
   const [tempRouteName, setTempRouteName] = useState("");
   const [tempStops, setTempStops] = useState<BusStop[]>([]);
+  const [activeStopsDirection, setActiveStopsDirection] = useState<'morning' | 'evening'>('morning');
+  const [tempEveningTimes, setTempEveningTimes] = useState<Record<string, string>>({});
   const [tempPath, setTempPath] = useState<[number, number][]>([]);
   const [tempOSRMPoints, setTempOSRMPoints] = useState<[number, number][]>([]);
   const [tempBusData, setTempBusData] = useState({
@@ -275,6 +277,7 @@ export default function AdminDashboard({
       setTempPath([...(route.path || [])]);
       setTempOSRMPoints([]); 
       setTempBusData({ busId: route.busId || '', numberPlate: route.numberPlate, driver: route.driver, driverPhone: route.driverPhone });
+      setTempEveningTimes(route.eveningTimes || {});
     } else {
       setEditingRouteId(null);
       setTempRouteName("");
@@ -282,7 +285,9 @@ export default function AdminDashboard({
       setTempPath([]);
       setTempOSRMPoints([]);
       setTempBusData({ busId: '', numberPlate: '', driver: '', driverPhone: '' });
+      setTempEveningTimes({});
     }
+    setActiveStopsDirection('morning');
     setIsEditing(true);
     setCurrentEditTab('NAME');
   };
@@ -298,6 +303,7 @@ export default function AdminDashboard({
       driverPhone: selectedDriver?.phone || "N/A", 
       numberPlate: selectedBus?.numberPlate || "TBD", 
       busId: tempBusData.busId, 
+      eveningTimes: { ...tempEveningTimes },
       eta: '---' 
     };
     if (editingRouteId) {
@@ -595,16 +601,143 @@ export default function AdminDashboard({
               </div>
             )}
 
-            {(currentEditTab === 'OSRM' || currentEditTab === 'STOPS') && (
+            {currentEditTab === 'OSRM' && (
               <div className="flex-1 flex flex-col relative">
                 <div ref={mapContainerRef} className="flex-1" />
                 <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-white/50">
                   <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                    {currentEditTab === 'OSRM' ? <Waypoints className="w-3 h-3 text-blue-500" /> : <MapPinPlus className="w-3 h-3 text-slate-900" />}
-                    {currentEditTab === 'OSRM' ? 'Tap road waypoints for path' : 'Tap to place bus stops'}
+                    <Waypoints className="w-3 h-3 text-blue-500" />
+                    Tap road waypoints for path
                   </p>
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => currentEditTab === 'OSRM' ? setTempOSRMPoints([]) : setTempStops([])} className="px-4 py-2 bg-slate-100 rounded-xl text-[9px] font-black uppercase text-slate-500">Reset</button>
+                    <button onClick={() => setTempOSRMPoints([])} className="px-4 py-2 bg-slate-100 rounded-xl text-[9px] font-black uppercase text-slate-500">Reset Path</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentEditTab === 'STOPS' && (
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                {/* Map interface panel */}
+                <div className="flex-1 relative min-h-[300px] lg:min-h-0 bg-slate-100">
+                  <div ref={mapContainerRef} className="absolute inset-0" />
+                  <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-lg border border-slate-105 pointer-events-auto">
+                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                      <MapPinPlus className="w-3.5 h-3.5 text-slate-900" />
+                      Tap the map directly to place stops
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <button 
+                        onClick={() => setTempStops([])} 
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 transition-colors rounded-lg text-[9px] font-black uppercase text-slate-500"
+                      >
+                        Reset All Stops
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stops edit list panel */}
+                <div className="w-full lg:w-[380px] bg-white border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col overflow-hidden h-[300px] lg:h-full">
+                  <div className="p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Stops and Times ({tempStops.length})</h4>
+                    <p className="text-[10px] text-slate-400 mt-1 mb-3">Configure stop names and scheduled arrival/departure times below.</p>
+                    
+                    {/* Direction Switcher Toggle */}
+                    <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        type="button" 
+                        onClick={() => setActiveStopsDirection('morning')}
+                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-155 elegance ${activeStopsDirection === 'morning' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Morning (Forward)
+                      </button>
+                      <button
+                        type="button" 
+                        onClick={() => {
+                          const newEveningTimes = { ...tempEveningTimes };
+                          tempStops.forEach(stop => {
+                            if (!newEveningTimes[stop.id]) {
+                              newEveningTimes[stop.id] = stop.time || '05:00 PM';
+                            }
+                          });
+                          setTempEveningTimes(newEveningTimes);
+                          setActiveStopsDirection('evening');
+                        }}
+                        className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-155 elegance ${activeStopsDirection === 'evening' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Evening (Reversed)
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar">
+                    {tempStops.length === 0 ? (
+                      <div className="text-center py-12 px-6">
+                        <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2.5" />
+                        <p className="text-xs font-bold text-slate-600">No stops placed yet</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Tap on the map to add stop locations.</p>
+                      </div>
+                    ) : (
+                      (activeStopsDirection === 'evening' ? [...tempStops].reverse() : tempStops).map((stop, idx) => (
+                        <div key={stop.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 relative space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="w-5 h-5 bg-slate-900 text-white rounded-full flex items-center justify-center text-[10px] font-black select-none">
+                              {idx + 1}
+                            </span>
+                            {activeStopsDirection === 'morning' && (
+                              <button 
+                                onClick={() => setTempStops(prev => prev.filter(s => s.id !== stop.id))}
+                                className="text-slate-400 hover:text-red-500 p-1 rounded-lg transition-colors hover:bg-slate-100"
+                                title="Delete Stop"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-wider block mb-1">Stop Name</label>
+                              <input 
+                                type="text" 
+                                value={stop.name} 
+                                disabled={activeStopsDirection === 'evening'}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setTempStops(prev => prev.map(s => s.id === stop.id ? { ...s, name: val } : s));
+                                }}
+                                className={`w-full border rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 ${activeStopsDirection === 'evening' ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-slate-200'}`}
+                                placeholder={`Stop ${idx + 1}`}
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+                                {activeStopsDirection === 'morning' ? 'Arrival Time (Morning)' : 'Arrival Time (Evening)'}
+                              </label>
+                              <input 
+                                type="text" 
+                                value={activeStopsDirection === 'morning' ? stop.time : (tempEveningTimes[stop.id] || stop.time || '')} 
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (activeStopsDirection === 'morning') {
+                                    setTempStops(prev => prev.map(s => s.id === stop.id ? { ...s, time: val } : s));
+                                  } else {
+                                    setTempEveningTimes(prev => ({
+                                      ...prev,
+                                      [stop.id]: val
+                                    }));
+                                  }
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+                                placeholder={activeStopsDirection === 'morning' ? "e.g. 07:30 AM" : "e.g. 04:30 PM"}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
