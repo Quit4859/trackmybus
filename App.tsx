@@ -175,7 +175,8 @@ const App: React.FC = () => {
           actualLat: data.lat, 
           actualLng: data.lng,
           heading: data.heading,
-          isLive: data.isLive
+          isLive: data.isLive,
+          direction: data.direction || r.direction
         };
       }
       return r;
@@ -364,7 +365,8 @@ const App: React.FC = () => {
               lat: lat,
               lng: lng,
               heading: userHeading,
-              isLive: true
+              isLive: true,
+              direction: currentRoute.direction
             });
             lastBroadcastTime.current = now;
          }
@@ -390,7 +392,27 @@ const App: React.FC = () => {
         lat: lat,
         lng: lng,
         heading: userHeading,
-        isLive: status
+        isLive: status,
+        direction: currentRoute?.direction
+    });
+  };
+
+  const handleToggleDirection = (dir: 'morning' | 'evening') => {
+    if (!activeRoute) return;
+    setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
+    
+    // Broadcast status change immediately
+    const lat = userLocation ? userLocation[0] : (activeRoute.liveLat || activeRoute.stops[0].lat || 0);
+    const lng = userLocation ? userLocation[1] : (activeRoute.liveLng || activeRoute.stops[0].lng || 0);
+    
+    console.log(`📡 Toggle Direction: ${dir}`);
+    publishBusUpdate({
+      routeId: activeRoute.id,
+      lat: lat,
+      lng: lng,
+      heading: userHeading,
+      isLive: activeRoute.isLive || false,
+      direction: dir
     });
   };
 
@@ -485,11 +507,7 @@ const App: React.FC = () => {
           onToggleTracking={handleToggleTracking}
           onLogout={handleLogout}
           onSwitchRoute={handleRouteSwitch}
-          onToggleDirection={(dir) => {
-            if (activeRoute) {
-              setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
-            }
-          }}
+          onToggleDirection={handleToggleDirection}
         />;
       case 'CHAT':
         return <AIChatbot onEmergency={triggerEmergency} />;
@@ -516,11 +534,7 @@ const App: React.FC = () => {
           route={activeRoute} 
           onEmergency={triggerEmergency}
           onLogout={handleLogout} 
-          onToggleDirection={(dir) => {
-            if (activeRoute) {
-              setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
-            }
-          }}
+          onToggleDirection={handleToggleDirection}
         />;
       case 'PROFILE':
         return (
@@ -545,11 +559,7 @@ const App: React.FC = () => {
           userRole={userRole} 
           onToggleTracking={handleToggleTracking} 
           onLogout={handleLogout}
-          onToggleDirection={(dir) => {
-            if (activeRoute) {
-              setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
-            }
-          }}
+          onToggleDirection={handleToggleDirection}
         />;
     }
   };

@@ -19,6 +19,7 @@ export interface BusUpdatePayload {
   lng: number;
   heading: number;
   isLive: boolean;
+  direction?: 'morning' | 'evening';
   timestamp: number;
 }
 

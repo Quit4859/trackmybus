@@ -16,6 +16,7 @@ interface MapInterfaceProps {
 
 const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRole, onToggleTracking, onLogout, onSwitchRoute, onToggleDirection }) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [mapLoaded, setMapLoaded] = useState(false);
   // centerTarget: 'bus' = locked on bus, 'user' = locked on user, null = free roaming
   const [centerTarget, setCenterTarget] = useState<'bus' | 'user' | null>('bus');
   const [bearing, setBearing] = useState(0);
@@ -36,10 +37,19 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
 
    const isEvening = route.direction === 'evening';
    const displayedStops = isEvening 
-     ? [...route.stops].reverse().map(stop => ({
-         ...stop,
-         time: route.eveningTimes?.[stop.id] || stop.time
-       }))
+     ? [...route.stops].reverse().map(stop => {
+         let revStatus = stop.status;
+         if (stop.status === 'passed') {
+           revStatus = 'upcoming';
+         } else if (stop.status === 'upcoming') {
+           revStatus = 'passed';
+         }
+         return {
+           ...stop,
+           status: revStatus,
+           time: route.eveningTimes?.[stop.id] || stop.time
+         };
+       })
      : route.stops;
 
    const displayedPath = isEvening && route.path ? [...route.path].reverse() : route.path;
@@ -186,6 +196,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         });
       }
 
+      setMapLoaded(true);
       updateStopMarkers(map);
     });
 
@@ -234,10 +245,10 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     }
   }, [centerTarget]);
 
-  // Update Route Path when route changes or direction shifts
+  // Update Route Path when route changes, map finishes loading, or direction shifts
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.getStyle() || !displayedPath) return;
+    if (!map || !mapLoaded || !displayedPath) return;
 
     const source = map.getSource('bus-path') as maplibregl.GeoJSONSource;
     if (source) {
@@ -248,7 +259,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         });
     }
     updateStopMarkers(map);
-  }, [route.id, route.direction, JSON.stringify(displayedPath), JSON.stringify(displayedStops)]); 
+  }, [mapLoaded, route.id, route.direction, JSON.stringify(displayedPath), JSON.stringify(displayedStops)]); 
 
   const updateStopMarkers = (mapInstance: maplibregl.Map) => {
     stopMarkersRef.current.forEach(m => m.remove());
