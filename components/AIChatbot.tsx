@@ -3,6 +3,7 @@ import { Send, Loader2, AlertTriangle } from 'lucide-react';
 import { ChatMessage } from '../types.ts';
 import { sendChatMessage } from '../services/geminiService.ts';
 import { BotIcon } from './BotIcon.tsx';
+import Markdown from 'react-markdown';
 
 interface AIChatbotProps {
   onEmergency?: () => void;
@@ -96,13 +97,31 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
               className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                className={`max-w-[85%] sm:max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
                   msg.sender === 'user'
                     ? 'bg-slate-900 text-white rounded-br-none'
                     : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
                 }`}
               >
-                {msg.text}
+                {msg.sender === 'user' ? (
+                  <div className="whitespace-pre-wrap">{msg.text}</div>
+                ) : (
+                  <div className="markdown-body text-slate-700 space-y-1">
+                    <Markdown
+                      components={{
+                        ul: ({ children }) => <ul className="list-disc pl-4 my-1 space-y-1 text-slate-700">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal pl-4 my-1 space-y-1 text-slate-700">{children}</ol>,
+                        li: ({ children }) => <li className="text-slate-700 leading-relaxed pl-0.5">{children}</li>,
+                        p: ({ children }) => <p className="mb-1 last:mb-0 leading-relaxed text-slate-700">{children}</p>,
+                        strong: ({ children }) => <strong className="font-bold text-slate-900">{children}</strong>,
+                        h1: ({ children }) => <h1 className="text-sm font-bold mt-2 mb-1 text-slate-900 border-b border-slate-100 pb-0.5">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-xs font-bold mt-1.5 mb-1 text-slate-900">{children}</h2>,
+                      }}
+                    >
+                      {msg.text}
+                    </Markdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}
