@@ -109,6 +109,90 @@ export default function AdminDashboard({
     return coordsList;
   }, []);
 
+  // Time normalization helper on blur (focus loss)
+  const handleTimeBlur = (stopId: string, value: string, direction: 'morning' | 'evening') => {
+    let trimmed = value.trim();
+    if (!trimmed) return;
+
+    // Check if they explicitly specified AM or PM
+    let ampm = '';
+    const hasAM = /am\b/i.test(trimmed);
+    const hasPM = /pm\b/i.test(trimmed);
+    
+    // Remove all characters except digits, colon, and period
+    let numbersAndSeparators = trimmed.replace(/[^0-9:.]/g, '');
+    
+    let hours = 0;
+    let minutes = 0;
+    
+    // Split by possible separators
+    const parts = numbersAndSeparators.split(/[:.]/);
+    if (parts.length >= 2) {
+      hours = parseInt(parts[0], 10) || 0;
+      minutes = parseInt(parts[1], 10) || 0;
+    } else if (parts.length === 1 && parts[0] !== '') {
+      const p = parts[0];
+      if (p.length <= 2) {
+        hours = parseInt(p, 10) || 0;
+        minutes = 0;
+      } else if (p.length === 3) {
+        hours = parseInt(p.slice(0, 1), 10) || 0;
+        minutes = parseInt(p.slice(1), 10) || 0;
+      } else {
+        hours = parseInt(p.slice(0, 2), 10) || 0;
+        minutes = parseInt(p.slice(2, 4), 10) || 0;
+      }
+    } else {
+      return; // Do not edit if not parseable
+    }
+
+    if (hours > 23) hours = 23;
+    if (minutes > 59) minutes = 59;
+
+    // Deduce AM / PM dynamically
+    if (hasAM) {
+      ampm = 'AM';
+    } else if (hasPM) {
+      ampm = 'PM';
+    } else {
+      // Auto-assign based on context rules
+      if (hours === 12) {
+        if (direction === 'morning') {
+          // "12:00 AM morning" -> Midnight
+          ampm = 'AM';
+        } else {
+          // Noon
+          ampm = 'PM';
+        }
+      } else if (hours > 12) {
+        hours = hours - 12;
+        ampm = 'PM';
+      } else {
+        // hours < 12
+        if (direction === 'evening') {
+          ampm = 'PM';
+        } else {
+          ampm = 'AM';
+        }
+      }
+    }
+
+    if (hours === 0) {
+      hours = 12;
+    }
+
+    const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+
+    if (direction === 'morning') {
+      setTempStops(prev => prev.map(s => s.id === stopId ? { ...s, time: formattedTime } : s));
+    } else {
+      setTempEveningTimes(prev => ({
+        ...prev,
+        [stopId]: formattedTime
+      }));
+    }
+  };
+
   // --- Overview Map Logic ---
   useEffect(() => {
     if (activeTab !== 'overview' || isEditing || !overviewMapContainerRef.current) {
@@ -730,6 +814,7 @@ export default function AdminDashboard({
                                     }));
                                   }
                                 }}
+                                onBlur={(e) => handleTimeBlur(stop.id, e.target.value, activeStopsDirection)}
                                 className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
                                 placeholder={activeStopsDirection === 'morning' ? "e.g. 07:30 AM" : "e.g. 04:30 PM"}
                               />
