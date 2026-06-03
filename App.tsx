@@ -545,7 +545,13 @@ const App: React.FC = () => {
           onToggleDirection={handleToggleDirection}
         />;
       case 'CHAT':
-        return <AIChatbot onEmergency={triggerEmergency} />;
+        return <AIChatbot 
+          onEmergency={triggerEmergency} 
+          routes={routes}
+          drivers={drivers}
+          buses={buses}
+          emergencyAlerts={emergencyAlerts}
+        />;
       case 'ADMIN':
         return <AdminDashboard 
           routes={routes} 

@@ -44,8 +44,8 @@ async function startServer() {
 
   const SYSTEM_INSTRUCTION_CHAT = `You are the intelligent assistant for the "College Bus Tracker" app. 
 Your goal is to help students, parents, and admins with transport-related queries.
-You can answer questions about bus schedules (assume standard 8 AM - 4 PM college timing), safety protocols, and general college transport FAQs.
-Keep answers concise, friendly, and helpful. Tone should be professional yet accessible.`;
+You can answer questions about bus schedules, routes, stops, active safety/emergency alerts, and helper contacts.
+Keep answers concise, friendly, helpful, and highly accurate. Tone should be professional yet accessible.`;
 
   const SYSTEM_INSTRUCTION_IMAGE = `You are a visual assistant for the "College Bus Tracker" app.
 Analyze the image provided. 
@@ -57,7 +57,7 @@ Keep the response structured and actionable.`;
   // API Endpoints
   app.post("/api/gemini/chat", async (req, res) => {
     try {
-      const { message, history } = req.body;
+      const { message, history, systemContext } = req.body;
       if (!message) {
         return res.status(400).json({ error: "Message is required." });
       }
@@ -70,12 +70,27 @@ Keep the response structured and actionable.`;
 
       contents.push({ role: "user", parts: [{ text: message }] });
 
+      let dynamicSystemInstruction = SYSTEM_INSTRUCTION_CHAT;
+      if (systemContext) {
+        dynamicSystemInstruction = `${SYSTEM_INSTRUCTION_CHAT}
+
+LIVE SYSTEM DATA & CURRENT CONTEXT:
+The following is the 100% accurate, live database snapshot of routes, stops, buses, drivers, and active alerts from the platform, which may have been customized or updated:
+${JSON.stringify(systemContext, null, 2)}
+
+Instructions for live data usage:
+1. When asked about a specific route, search inside the live "routes" array. Answer with the exact stops, direction, scheduled times, and ETA.
+2. If the user asks about driver names or contacts (such as Rajesh Kumar's phone number), use the live info (e.g. Rajesh Kumar: +91 98765 43210).
+3. If asked about active SOS or emergency status, note any reports under "activeEmergencyAlerts".
+4. Refer to this live context as the ultimate source of truth. Do not make up mock schedules or default to outdated placeholders.`;
+      }
+
       const ai = getGeminiClient();
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: contents,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION_CHAT,
+          systemInstruction: dynamicSystemInstruction,
           temperature: 0.7,
         },
       });

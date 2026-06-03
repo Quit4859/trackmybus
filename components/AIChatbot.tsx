@@ -1,15 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, AlertTriangle } from 'lucide-react';
-import Markdown from 'react-markdown';
-import { ChatMessage } from '../types.ts';
+import { ChatMessage, BusRoute, Bus, Driver, EmergencyAlert } from '../types.ts';
 import { sendChatMessage } from '../services/geminiService.ts';
 import { BotIcon } from './BotIcon.tsx';
 
 interface AIChatbotProps {
   onEmergency?: () => void;
+  routes?: BusRoute[];
+  drivers?: Driver[];
+  buses?: Bus[];
+  emergencyAlerts?: EmergencyAlert[];
 }
 
-const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
+const AIChatbot: React.FC<AIChatbotProps> = ({ 
+  onEmergency,
+  routes = [],
+  drivers = [],
+  buses = [],
+  emergencyAlerts = []
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -50,7 +59,35 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
 
     try {
       const history = messages.map(m => ({ sender: m.sender, text: m.text }));
-      const responseText = await sendChatMessage(userMsg.text, history);
+      
+      const systemContext = {
+        routes: routes.map(r => ({
+          id: r.id,
+          name: r.name,
+          driver: r.driver,
+          driverPhone: r.driverPhone,
+          numberPlate: r.numberPlate,
+          eta: r.eta,
+          isLive: r.isLive,
+          direction: r.direction,
+          stops: (r.stops || []).map(s => ({
+            name: s.name,
+            time: s.time,
+            status: s.status,
+            eveningTime: r.eveningTimes?.[s.id] || null
+          }))
+        })),
+        drivers: drivers.map(d => ({ name: d.name, phone: d.phone, email: d.email })),
+        buses: buses.map(b => ({ id: b.id, numberPlate: b.numberPlate })),
+        activeEmergencyAlerts: emergencyAlerts.map(e => ({
+          userName: e.userName,
+          userRole: e.userRole,
+          time: e.time,
+          date: e.date
+        }))
+      };
+
+      const responseText = await sendChatMessage(userMsg.text, history, systemContext);
       
       if (isMounted.current) {
         const botMsg: ChatMessage = {
@@ -103,25 +140,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
                     : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
                 }`}
               >
-                <div className="markdown-body">
-                  <Markdown
-                    components={{
-                      ul: ({ ...props }) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
-                      ol: ({ ...props }) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
-                      li: ({ ...props }) => <li className="my-0.5" {...props} />,
-                      h1: ({ ...props }) => <h1 className="text-base font-bold my-2" {...props} />,
-                      h2: ({ ...props }) => <h2 className="text-sm font-bold my-2" {...props} />,
-                      h3: ({ ...props }) => <h3 className="text-xs font-bold my-1" {...props} />,
-                      p: ({ ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                      strong: ({ ...props }) => (
-                        <strong className={`font-semibold ${msg.sender === 'user' ? 'text-white' : 'text-slate-900'}`} {...props} />
-                      ),
-                      em: ({ ...props }) => <em className="italic" {...props} />,
-                    }}
-                  >
-                    {msg.text}
-                  </Markdown>
-                </div>
+                {msg.text}
               </div>
             </div>
           ))}
