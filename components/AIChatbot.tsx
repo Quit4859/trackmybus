@@ -4,6 +4,86 @@ import { ChatMessage, BusRoute, Bus, Driver, EmergencyAlert } from '../types.ts'
 import { sendChatMessage } from '../services/geminiService.ts';
 import { BotIcon } from './BotIcon.tsx';
 
+interface MarkdownTextProps {
+  text: string;
+  isUser?: boolean;
+}
+
+const renderInlineBold = (str: string, isUser: boolean) => {
+  const parts = str.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className={`font-bold ${isUser ? 'text-white' : 'text-slate-900'}`}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+};
+
+const MarkdownText: React.FC<MarkdownTextProps> = ({ text, isUser = false }) => {
+  const lines = text.split('\n');
+
+  return (
+    <div className="space-y-1">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+
+        // 1. Headers: ## or ###
+        if (trimmed.startsWith('###')) {
+          const headerText = trimmed.replace(/^###\s*/, '');
+          return (
+            <h4 key={idx} className={`font-bold text-base mt-2 mb-1 ${isUser ? 'text-white' : 'text-slate-900'}`}>
+              {renderInlineBold(headerText, isUser)}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith('##')) {
+          const headerText = trimmed.replace(/^##\s*/, '');
+          return (
+            <h3 key={idx} className={`font-bold text-lg mt-3 mb-1 ${isUser ? 'text-white' : 'text-slate-900'}`}>
+              {renderInlineBold(headerText, isUser)}
+            </h3>
+          );
+        }
+        if (trimmed.startsWith('#')) {
+          const headerText = trimmed.replace(/^#\s*/, '');
+          return (
+            <h2 key={idx} className={`font-black text-xl mt-4 mb-2 ${isUser ? 'text-white' : 'text-slate-900'}`}>
+              {renderInlineBold(headerText, isUser)}
+            </h2>
+          );
+        }
+
+        // 2. Unordered lists: * or -
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+          const listText = trimmed.slice(2);
+          return (
+            <div key={idx} className="flex items-start gap-1 px-1 my-0.5 ml-2">
+              <span className={`font-bold mr-1 select-none ${isUser ? 'text-white' : 'text-yellow-500'}`}>•</span>
+              <span className="flex-1">{renderInlineBold(listText, isUser)}</span>
+            </div>
+          );
+        }
+
+        // If line is empty, render small pacing
+        if (!trimmed) {
+          return <div key={idx} className="h-1.5" />;
+        }
+
+        // Standard line
+        return (
+          <p key={idx} className="my-0.5">
+            {renderInlineBold(line, isUser)}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
 interface AIChatbotProps {
   onEmergency?: () => void;
   routes?: BusRoute[];
@@ -140,7 +220,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({
                     : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
                 }`}
               >
-                {msg.text}
+                <MarkdownText text={msg.text} isUser={msg.sender === 'user'} />
               </div>
             </div>
           ))}
