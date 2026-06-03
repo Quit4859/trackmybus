@@ -38,6 +38,31 @@ If it looks like a printed bus schedule or notice, extract the key dates and tim
 If it looks like a maintenance issue, describe the condition.
 Keep the response structured and actionable.`;
 
+// Helper for cascading model fallback to handle temporary 503 high-demand errors gracefully
+async function generateContentWithFallback(ai: any, params: any) {
+  const models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  let lastError: any = null;
+
+  for (const modelName of models) {
+    try {
+      const response = await ai.models.generateContent({
+        ...params,
+        model: modelName,
+      });
+      return response;
+    } catch (err: any) {
+      console.warn(`Gemini Model ${modelName} failed or returned high-demand error. Retrying next model. Error details:`, err.message || err);
+      lastError = err;
+      const errStr = String(err.message || "").toLowerCase();
+      // Do not fallback on terminal errors like invalid API keys or bad requests
+      if (errStr.includes("api_key_invalid") || errStr.includes("not valid") || errStr.includes("403") || errStr.includes("400")) {
+        throw err;
+      }
+    }
+  }
+  throw lastError;
+}
+
 // Live chat handler
 app.post("/api/gemini/chat", async (req, res) => {
   try {
@@ -69,8 +94,7 @@ Instructions for live data usage:
     }
 
     const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await generateContentWithFallback(ai, {
       contents: contents,
       config: {
         systemInstruction: dynamicSystemInstruction,
@@ -97,8 +121,7 @@ app.post("/api/gemini/analyze", async (req, res) => {
     }
 
     const ai = getGeminiClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const response = await generateContentWithFallback(ai, {
       contents: {
         parts: [
           {
