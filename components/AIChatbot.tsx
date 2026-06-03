@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, AlertTriangle } from 'lucide-react';
-import { ChatMessage } from '../types.ts';
+import { ChatMessage, Bus, BusRoute } from '../types.ts';
 import { sendChatMessage } from '../services/geminiService.ts';
 import { BotIcon } from './BotIcon.tsx';
+import ReactMarkdown from 'react-markdown';
 
 interface AIChatbotProps {
   onEmergency?: () => void;
+  routes?: BusRoute[];
+  buses?: Bus[];
 }
 
-const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
+const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency, routes = [], buses = [] }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -49,7 +52,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
 
     try {
       const history = messages.map(m => ({ sender: m.sender, text: m.text }));
-      const responseText = await sendChatMessage(userMsg.text, history);
+      const responseText = await sendChatMessage(userMsg.text, history, { routes, buses });
       
       if (isMounted.current) {
         const botMsg: ChatMessage = {
@@ -72,13 +75,12 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
   return (
     <div className="flex flex-col h-full bg-slate-50 pb-20 lg:pb-24 lg:pt-4">
       <div className="flex-1 w-full max-w-2xl mx-auto flex flex-col bg-white lg:shadow-xl lg:rounded-3xl lg:border lg:border-slate-150 overflow-hidden relative">
-        <div className="bg-white p-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
+        <div className="bg-white pt-12 pb-4 px-4 lg:pt-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <BotIcon className="w-6 h-6 text-yellow-500" />
               Bus Assistant
             </h2>
-            <p className="text-xs text-slate-500 font-medium">Powered by Gemini AI</p>
           </div>
           {onEmergency && (
             <button 
@@ -103,7 +105,36 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
                     : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
                 }`}
               >
-                {msg.text}
+                {msg.sender === 'user' ? (
+                  <div className="whitespace-pre-line">{msg.text}</div>
+                ) : (
+                  <div className="markdown-body space-y-2">
+                    <ReactMarkdown
+                      components={{
+                        ul: ({ children }) => <ul className="list-disc pl-5 my-1.5 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal pl-5 my-1.5 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="text-slate-700 text-sm font-medium">{children}</li>,
+                        p: ({ children }) => <p className="mb-2 last:mb-0 text-slate-700 font-medium leading-relaxed">{children}</p>,
+                        h1: ({ children }) => <h1 className="text-base font-black text-slate-900 mt-3 mb-1 tracking-tight">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-black text-slate-900 mt-2.5 mb-1 tracking-tight">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-xs font-black text-slate-800 mt-2 mb-0.5 uppercase tracking-wide">{children}</h3>,
+                        strong: ({ children }) => <strong className="font-bold text-slate-900">{children}</strong>,
+                        a: ({ href, children }) => (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-yellow-600 hover:text-yellow-700 hover:underline font-bold"
+                          >
+                            {children}
+                          </a>
+                        ),
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}

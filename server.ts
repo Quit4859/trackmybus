@@ -57,7 +57,7 @@ Keep the response structured and actionable.`;
   // API Endpoints
   app.post("/api/gemini/chat", async (req, res) => {
     try {
-      const { message, history } = req.body;
+      const { message, history, appContext } = req.body;
       if (!message) {
         return res.status(400).json({ error: "Message is required." });
       }
@@ -70,12 +70,38 @@ Keep the response structured and actionable.`;
 
       contents.push({ role: "user", parts: [{ text: message }] });
 
+      // Compile rich system instructions with dynamic state from appContext if available
+      let systemInstruction = SYSTEM_INSTRUCTION_CHAT;
+      if (appContext && appContext.routes && Array.isArray(appContext.routes)) {
+        let routeCtx = "\n\n----- REAL-TIME COLLEGE BUSES STATE -----\n";
+        appContext.routes.forEach((r: any) => {
+          routeCtx += `Route: "${r.name}" (ID: ${r.id})\n`;
+          routeCtx += `- Driver: ${r.driver || "N/A"} (${r.driverPhone || "N/A"})\n`;
+          routeCtx += `- Bus Plate: ${r.numberPlate || "N/A"}\n`;
+          routeCtx += `- Tracking Status: ${r.isLive ? "ONLINE (Live Tracking Active)" : "OFFLINE / STATIONARY"}\n`;
+          routeCtx += `- Current Route Direction Mode: Traveling in "${r.direction || "morning"}" direction\n`;
+          routeCtx += `- Current Bus Location ETA: ${r.eta || "N/A"}\n`;
+          routeCtx += `- Stops along this route (in travel order):\n`;
+          
+          // Re-order or list stops
+          const stopsToPrint = r.stops || [];
+          stopsToPrint.forEach((s: any) => {
+            const morningTime = s.time || "N/A";
+            const eveningTime = r.eveningTimes?.[s.id] || "N/A";
+            routeCtx += `  * Stop ID ${s.id}: "${s.name}" -> Morning Pick-up: ${morningTime} | Evening Drop-off: ${eveningTime} | Current Stop Status: ${s.status || "N/A"}\n`;
+          });
+          routeCtx += "\n";
+        });
+        routeCtx += "-----------------------------------------\n";
+        systemInstruction = `${SYSTEM_INSTRUCTION_CHAT}\n${routeCtx}\nIMPORTANT: Reference specific stop names, pick-up/drop-off schedules, driver contacts, and tracking statistics from the above lists when responding to queries. Keep responses helpful and clear.`;
+      }
+
       const ai = getGeminiClient();
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: contents,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION_CHAT,
+          systemInstruction: systemInstruction,
           temperature: 0.7,
         },
       });
