@@ -702,6 +702,59 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                     <Phone className="w-5 h-5" />
                 </a>
                 </div>
+                
+                {/* Active Direction Selector */}
+                {onToggleDirection && (
+                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-3xl mb-6">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Schedule View</span>
+                      <span className="text-[10px] font-semibold text-yellow-600 bg-yellow-400/10 px-2.5 py-1 rounded-full uppercase tracking-wider text-[9px]">
+                        {route.direction === 'evening' ? 'Evening Shift' : 'Morning Shift'}
+                      </span>
+                    </div>
+                    {userRole === 'driver' ? (
+                      <div className="flex gap-2 bg-slate-200/50 p-1 rounded-2xl">
+                        <button
+                          onClick={() => onToggleDirection('morning')}
+                          className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                            (!route.direction || route.direction === 'morning')
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          <Sun className="w-3.5 h-3.5 text-yellow-500" /> Morning
+                        </button>
+                        <button
+                          onClick={() => onToggleDirection('evening')}
+                          className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                            route.direction === 'evening'
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          <Moon className="w-3.5 h-3.5 text-slate-600" /> Evening
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 bg-white/80 border border-slate-100 p-3 rounded-2xl shadow-sm">
+                        <div className="w-9 h-9 rounded-xl bg-slate-100/60 flex items-center justify-center">
+                          {route.direction === 'evening' ? (
+                            <Moon className="w-4.5 h-4.5 text-slate-600 animate-pulse" />
+                          ) : (
+                            <Sun className="w-4.5 h-4.5 text-yellow-500 animate-pulse" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-black text-slate-800">
+                            {route.direction === 'evening' ? 'Evening Ride Active' : 'Morning Ride Active'}
+                          </p>
+                          <p className="text-[9px] font-bold text-slate-400">Shift controlled automatically / by driver</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-6">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Route Schedule</h3>
                     <div className="relative pl-6 space-y-8">

@@ -14,7 +14,7 @@ interface DriverDashboardProps {
 
 const DriverDashboard: React.FC<DriverDashboardProps> = ({ driver, bus, route, onEmergency, onLogout, onToggleDirection }) => {
   return (
-    <div className="flex flex-col h-full bg-slate-50 overflow-y-auto no-scrollbar pb-24 lg:pb-28 lg:pt-4">
+    <div className="absolute inset-0 flex flex-col bg-slate-50 overflow-y-auto no-scrollbar pb-24 lg:pb-28 lg:pt-4">
       <div className="w-full max-w-2xl mx-auto bg-white rounded-t-3xl lg:rounded-3xl lg:shadow-xl lg:border lg:border-slate-150 overflow-hidden">
         {/* Profile Header */}
         <div className="p-8 pt-12 bg-white border-b border-slate-100 flex flex-col items-center shrink-0 shadow-sm">

@@ -120,6 +120,8 @@ const App: React.FC = () => {
   const routesRef = useRef(routes);
   useEffect(() => { routesRef.current = routes; }, [routes]);
 
+  const lastAutoDirRef = useRef<'morning' | 'evening' | null>(null);
+
   const [activeRouteId, setActiveRouteId] = useState<string>(() => {
     const storedRoutes = loadStored('bus_routes', INITIAL_ROUTES);
     return storedRoutes.length > 0 ? storedRoutes[0].id : '';
@@ -146,6 +148,59 @@ const App: React.FC = () => {
       setRoutes(INITIAL_ROUTES);
     }
   }, []);
+
+  // --- Automation: Auto transition shift/direction based on morning/evening time ---
+  useEffect(() => {
+    const applyAutoShiftTransition = () => {
+      const now = new Date();
+      const hours = now.getHours();
+      // After 11:59 AM (>= 12:00 PM) we change to evening.
+      // After 11:59 PM (>= 12:00 AM) we change to morning.
+      const expectedDir: 'morning' | 'evening' = hours >= 12 ? 'evening' : 'morning';
+
+      // We only execute state updates when boundary changes to prevent overriding manual overrides
+      if (lastAutoDirRef.current === expectedDir) return;
+
+      lastAutoDirRef.current = expectedDir;
+
+      setRoutes(prev => {
+        let hasChanges = false;
+        const updated = prev.map(r => {
+          if (r.direction !== expectedDir) {
+            hasChanges = true;
+            const startStop = expectedDir === 'evening'
+              ? r.stops[r.stops.length - 1]
+              : r.stops[0];
+            return {
+              ...r,
+              direction: expectedDir,
+              liveLat: r.isLive ? r.liveLat : startStop.lat,
+              liveLng: r.isLive ? r.liveLng : startStop.lng,
+              actualLat: r.isLive ? r.actualLat : startStop.lat,
+              actualLng: r.isLive ? r.actualLng : startStop.lng
+            };
+          }
+          return r;
+        });
+
+        if (hasChanges) {
+          console.log(`⏰ [Auto Shift Automation] Shift changed to ${expectedDir}. Transitioning all routes.`);
+          publishGlobalConfig({
+            routes: updated,
+            buses: buses,
+            drivers: drivers,
+            students: students
+          });
+          return updated;
+        }
+        return prev;
+      });
+    };
+
+    applyAutoShiftTransition();
+    const interval = setInterval(applyAutoShiftTransition, 15000); // Check every 15 seconds
+    return () => clearInterval(interval);
+  }, [buses, drivers, students]);
 
   // --- Automatic Route Assignment Logic ---
   useEffect(() => {
@@ -579,17 +634,19 @@ const App: React.FC = () => {
         />;
       case 'PROFILE':
         return (
-          <div className="flex flex-col h-full bg-slate-50 items-center justify-center p-8">
-            <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center w-full max-w-sm">
-              <div className="w-24 h-24 bg-yellow-400 rounded-3xl flex items-center justify-center mb-6 shadow-lg"><User className="w-12 h-12 text-slate-900" /></div>
-              <h2 className="text-2xl font-black text-slate-900 mb-1 capitalize">{currentUser?.name || userRole}</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">{currentUser?.email || 'Logged In'}</p>
-              <button 
-                onClick={handleLogout} 
-                className="w-full bg-red-50 text-red-600 py-4 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-3 active:scale-95 transition-transform"
-              >
-                <LogOut className="w-4 h-4" /> Log Out
-              </button>
+          <div className="absolute inset-0 bg-slate-50 overflow-y-auto p-8">
+            <div className="min-h-full w-full flex flex-col items-center justify-center py-6">
+              <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center w-full max-w-sm">
+                <div className="w-24 h-24 bg-yellow-400 rounded-3xl flex items-center justify-center mb-6 shadow-lg"><User className="w-12 h-12 text-slate-900" /></div>
+                <h2 className="text-2xl font-black text-slate-900 mb-1 capitalize">{currentUser?.name || userRole}</h2>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">{currentUser?.email || 'Logged In'}</p>
+                <button 
+                  onClick={handleLogout} 
+                  className="w-full bg-red-50 text-red-600 py-4 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-3 active:scale-95 transition-transform"
+                >
+                  <LogOut className="w-4 h-4" /> Log Out
+                </button>
+              </div>
             </div>
           </div>
         );
