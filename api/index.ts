@@ -40,7 +40,7 @@ Keep the response structured and actionable.`;
 
 // Helper for cascading model fallback to handle temporary 503 high-demand errors gracefully
 async function generateContentWithFallback(ai: any, params: any) {
-  const models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  const models = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
   let lastError: any = null;
 
   for (const modelName of models) {
