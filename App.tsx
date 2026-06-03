@@ -378,7 +378,8 @@ const App: React.FC = () => {
 
   const handleToggleTracking = (status: boolean) => {
     // 1. Update Local State
-    setRoutes(prev => prev.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r));
+    const updatedRoutes = routes.map(r => r.id === activeRouteId ? { ...r, isLive: status } : r);
+    setRoutes(updatedRoutes);
 
     // 2. Broadcast Status Change immediately
     // If we have GPS, send it. If not, use the last known route location.
@@ -395,15 +396,41 @@ const App: React.FC = () => {
         isLive: status,
         direction: currentRoute?.direction
     });
+
+    // Also sync globally so other clients see tracking status immediately
+    publishGlobalConfig({
+      routes: updatedRoutes,
+      buses,
+      drivers,
+      students
+    });
   };
 
   const handleToggleDirection = (dir: 'morning' | 'evening') => {
     if (!activeRoute) return;
-    setRoutes(prev => prev.map(r => r.id === activeRoute.id ? { ...r, direction: dir } : r));
     
-    // Broadcast status change immediately
-    const lat = userLocation ? userLocation[0] : (activeRoute.liveLat || activeRoute.stops[0].lat || 0);
-    const lng = userLocation ? userLocation[1] : (activeRoute.liveLng || activeRoute.stops[0].lng || 0);
+    // When switching direction, shift the default location to the start of the new route direction 
+    const startStop = dir === 'evening' 
+      ? activeRoute.stops[activeRoute.stops.length - 1] 
+      : activeRoute.stops[0];
+    const lat = userLocation ? userLocation[0] : startStop.lat;
+    const lng = userLocation ? userLocation[1] : startStop.lng;
+
+    const updatedRoutes = routes.map(r => {
+      if (r.id === activeRoute.id) {
+        return {
+          ...r,
+          direction: dir,
+          liveLat: lat,
+          liveLng: lng,
+          actualLat: lat,
+          actualLng: lng
+        };
+      }
+      return r;
+    });
+
+    setRoutes(updatedRoutes);
     
     console.log(`📡 Toggle Direction: ${dir}`);
     publishBusUpdate({
@@ -413,6 +440,14 @@ const App: React.FC = () => {
       heading: userHeading,
       isLive: activeRoute.isLive || false,
       direction: dir
+    });
+
+    // Also sync globally so all listening students instantly transition to the new direction
+    publishGlobalConfig({
+      routes: updatedRoutes,
+      buses,
+      drivers,
+      students
     });
   };
 

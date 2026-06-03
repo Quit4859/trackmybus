@@ -35,28 +35,6 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
   const targetBusPos = useRef<[number, number] | null>(null);
   const animationFrameRef = useRef<number>(0);
 
-   const isEvening = route.direction === 'evening';
-   const displayedStops = isEvening 
-     ? [...route.stops].reverse().map(stop => {
-         let revStatus = stop.status;
-         if (stop.status === 'passed') {
-           revStatus = 'upcoming';
-         } else if (stop.status === 'upcoming') {
-           revStatus = 'passed';
-         }
-         return {
-           ...stop,
-           status: revStatus,
-           time: route.eveningTimes?.[stop.id] || stop.time
-         };
-       })
-     : route.stops;
-
-   const displayedPath = isEvening && route.path ? [...route.path].reverse() : route.path;
-
-   const currentStopIndex = displayedStops.findIndex(s => s.status === 'current');
-   const activeIndex = currentStopIndex !== -1 ? currentStopIndex : 0;
-  
   const DEFAULT_LNG_LAT: [number, number] = [76.4764, 13.2642];
 
   const isValidCoord = (lat: any, lng: any) => 
@@ -68,6 +46,55 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     (userRole === 'driver' || userRole === 'admin')
       ? (isValidCoord(route.actualLat, route.actualLng) ? [route.actualLng!, route.actualLat!] : DEFAULT_LNG_LAT)
       : (isValidCoord(route.liveLat, route.liveLng) ? [route.liveLng!, route.liveLat!] : DEFAULT_LNG_LAT);
+
+   const isEvening = route.direction === 'evening';
+   
+   // Arrange stops in travel order and assign proper evening times if applicable
+   const rawStops = isEvening 
+     ? [...route.stops].reverse().map(stop => ({
+         ...stop,
+         time: route.eveningTimes?.[stop.id] || stop.time
+       }))
+     : route.stops;
+
+   // Use the bus's current animated position (preferred) or the static position
+   const currentBusCoords = currentBusPos.current || busLngLat;
+
+   // Geolocation proximity matching to dynamically set passed/current/upcoming statuses:
+   let closestIdx = 0;
+   let minDistance = Infinity;
+
+   rawStops.forEach((stop, idx) => {
+     // Compute squared distance to stop
+     const dist = (stop.lng - currentBusCoords[0]) ** 2 + (stop.lat - currentBusCoords[1]) ** 2;
+     if (dist < minDistance) {
+       minDistance = dist;
+       closestIdx = idx;
+     }
+   });
+
+   // Map status based on chronological relative progress in travel direction:
+   const displayedStops = rawStops.map((stop, idx) => {
+     let calcStatus: 'passed' | 'current' | 'upcoming' = 'upcoming';
+     if (idx < closestIdx) {
+       calcStatus = 'passed';
+     } else if (idx === closestIdx) {
+       calcStatus = 'current';
+     } else {
+       calcStatus = 'upcoming';
+     }
+     return {
+       ...stop,
+       status: calcStatus
+     };
+   });
+
+   const displayedPath = isEvening && route.path ? [...route.path].reverse() : route.path;
+
+   const currentStopIndex = displayedStops.findIndex(s => s.status === 'current');
+   const activeIndex = currentStopIndex !== -1 ? currentStopIndex : 0;
+  
+
 
   const [screenHeight, setScreenHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
   const [isLaptop, setIsLaptop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
@@ -651,7 +678,16 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                         <Clock className="w-4 h-4 text-yellow-500" />
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Est. Arrival</span>
                     </div>
-                    <h1 className="text-4xl font-black text-slate-900">{route.isLive ? route.eta : 'Offline'}</h1>
+                    <div className="flex items-baseline gap-2">
+                        <h1 id="est-arrival-status" className={`text-4xl font-black tracking-tight ${route.isLive ? 'text-slate-900' : 'text-slate-400'}`}>
+                            {route.isLive ? 'Online' : 'Offline'}
+                        </h1>
+                        {route.isLive && route.eta && route.eta !== '---' && (
+                            <span id="est-arrival-time" className="text-sm font-black text-emerald-600 bg-green-50 border border-green-100 px-3 py-1 rounded-full animate-pulse">
+                                {route.eta}
+                            </span>
+                        )}
+                    </div>
                 </div>
                 </div>
                 <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-4 lg:mb-8">
