@@ -234,7 +234,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
     }
   }, [centerTarget]);
 
-  // Update Route Path when route changes
+  // Update Route Path when route changes or direction shifts
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getStyle() || !displayedPath) return;
@@ -248,7 +248,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         });
     }
     updateStopMarkers(map);
-  }, [route.id, displayedPath]); 
+  }, [route.id, route.direction, JSON.stringify(displayedPath), JSON.stringify(displayedStops)]); 
 
   const updateStopMarkers = (mapInstance: maplibregl.Map) => {
     stopMarkersRef.current.forEach(m => m.remove());
@@ -659,7 +659,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Route Schedule</h3>
                     <div className="relative pl-6 space-y-8">
                         <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                        {route.stops.map((stop) => (
+                        {displayedStops.map((stop) => (
                             <div key={stop.id} className="relative flex items-center justify-between">
                                 <div className={`absolute -left-[23px] w-4 h-4 rounded-full border-4 border-white shadow-sm ${stop.status === 'current' ? 'bg-yellow-400 ring-8 ring-yellow-400/10' : stop.status === 'passed' ? 'bg-slate-300' : 'bg-slate-200'}`} />
                                 <span className={`text-sm font-bold ${stop.status === 'current' ? 'text-slate-900' : stop.status === 'passed' ? 'text-slate-400 line-through decoration-slate-200' : 'text-slate-500'}`}>{stop.name}</span>
