@@ -70,68 +70,70 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 pb-20">
-      <div className="bg-white p-4 shadow-sm z-10 sticky top-0 border-b border-slate-100 flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <BotIcon className="w-6 h-6 text-yellow-500" />
-            Bus Assistant
-          </h2>
-          <p className="text-xs text-slate-500 font-medium">Powered by Gemini AI</p>
-        </div>
-        {onEmergency && (
-          <button 
-            onClick={onEmergency}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-colors"
-          >
-            <AlertTriangle className="w-4 h-4" /> SOS
-          </button>
-        )}
-      </div>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
-                msg.sender === 'user'
-                  ? 'bg-slate-900 text-white rounded-br-none'
-                  : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
-              }`}
+    <div className="flex flex-col h-full bg-slate-50 pb-20 lg:pb-24 lg:pt-4">
+      <div className="flex-1 w-full max-w-2xl mx-auto flex flex-col bg-white lg:shadow-xl lg:rounded-3xl lg:border lg:border-slate-150 overflow-hidden relative">
+        <div className="bg-white p-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <BotIcon className="w-6 h-6 text-yellow-500" />
+              Bus Assistant
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">Powered by Gemini AI</p>
+          </div>
+          {onEmergency && (
+            <button 
+              onClick={onEmergency}
+              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-colors"
             >
-              {msg.text}
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white p-4 rounded-2xl rounded-bl-none shadow-sm border border-slate-100">
-              <Loader2 className="w-5 h-5 animate-spin text-yellow-500" />
-            </div>
-          </div>
-        )}
-      </div>
+              <AlertTriangle className="w-4 h-4" /> SOS
+            </button>
+          )}
+        </div>
 
-      <div className="p-4 bg-white border-t border-slate-100 sticky bottom-[80px]">
-        <div className="flex items-center gap-2 bg-slate-100 rounded-full px-4 py-2 border border-slate-200">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Ask about bus 101..."
-            className="flex-1 bg-transparent outline-none text-slate-900 text-sm placeholder:text-slate-400 font-medium"
-          />
-          <button
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className="bg-yellow-400 p-2 rounded-full text-slate-900 hover:bg-yellow-500 disabled:opacity-50 transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar bg-slate-50">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                  msg.sender === 'user'
+                    ? 'bg-slate-900 text-white rounded-br-none'
+                    : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
+                }`}
+              >
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white p-4 rounded-2xl rounded-bl-none shadow-sm border border-slate-100">
+                <Loader2 className="w-5 h-5 animate-spin text-yellow-500" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+          <div className="flex items-center gap-2 bg-slate-100 rounded-full px-4 py-2 border border-slate-200">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Ask about bus 101..."
+              className="flex-1 bg-transparent outline-none text-slate-900 text-sm placeholder:text-slate-400 font-medium"
+            />
+            <button
+              onClick={handleSend}
+              disabled={isLoading || !input.trim()}
+              className="bg-yellow-400 p-2 rounded-full text-slate-900 hover:bg-yellow-500 disabled:opacity-50 transition-colors"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

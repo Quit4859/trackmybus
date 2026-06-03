@@ -49,16 +49,22 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       : (isValidCoord(route.liveLat, route.liveLng) ? [route.liveLng!, route.liveLat!] : DEFAULT_LNG_LAT);
 
   const [screenHeight, setScreenHeight] = useState(typeof window !== 'undefined' ? window.innerHeight : 800);
+  const [isLaptop, setIsLaptop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
 
   useEffect(() => {
-    const handleResize = () => setScreenHeight(window.innerHeight);
+    const handleResize = () => {
+      setScreenHeight(window.innerHeight);
+      setIsLaptop(window.innerWidth >= 1024);
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
-  const EXPANDED_Y = 0; // Snap to very top
-  // Collapsed: Roughly in the middle-bottom
-  const COLLAPSED_Y = userRole === 'driver' ? screenHeight - 200 : screenHeight - 380;
+  const EXPANDED_Y = isLaptop ? 100 : 0; // Floating offset below the top card on laptop, snap to very top on mobile
+  // Collapsed: Roughly in the middle-bottom. Compact on laptop (210px visible) and taller on mobile (380px visible).
+  const COLLAPSED_Y = userRole === 'driver' 
+    ? screenHeight - 200 
+    : (isLaptop ? screenHeight - 210 : screenHeight - 380);
   // Minimized: Just a small handle visible above the 80px BottomNav
   const MINIMIZED_Y = screenHeight - 110; 
   // Hidden: Completely off-screen
@@ -66,6 +72,28 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
 
   // Track the current snap position to correctly calculate drag offsets
   const [snapPoint, setSnapPoint] = useState(COLLAPSED_Y);
+
+  // Sync snapPoint with screen height/width resizing dynamically
+  useEffect(() => {
+    let nearest = snapPoint;
+    const diffToCollapsed = Math.abs(snapPoint - COLLAPSED_Y);
+    const diffToExpanded = Math.abs(snapPoint - EXPANDED_Y);
+    const diffToHidden = Math.abs(snapPoint - HIDDEN_Y);
+    const diffToMinimized = Math.abs(snapPoint - MINIMIZED_Y);
+
+    if (diffToCollapsed < diffToExpanded && diffToCollapsed < diffToHidden && diffToCollapsed < diffToMinimized) {
+      nearest = COLLAPSED_Y;
+    } else if (diffToExpanded < diffToCollapsed && diffToExpanded < diffToHidden && diffToExpanded < diffToMinimized) {
+      nearest = EXPANDED_Y;
+    } else if (diffToMinimized < diffToCollapsed && diffToMinimized < diffToExpanded && diffToMinimized < diffToHidden) {
+      nearest = MINIMIZED_Y;
+    } else {
+      nearest = HIDDEN_Y;
+    }
+
+    setSnapPoint(nearest);
+    controls.start({ y: nearest, transition: { duration: 0.1 } });
+  }, [screenHeight, isLaptop]);
 
   const calculateBearing = (start: [number, number], end: [number, number]) => {
     const startLat = (start[1] * Math.PI) / 180;
@@ -459,8 +487,8 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         )}
       </AnimatePresence>
 
-      <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pt-6 pointer-events-none">
-        <div className="bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border border-white/50 pointer-events-auto">
+      <div className="absolute top-0 left-0 right-0 lg:left-6 lg:right-auto lg:top-6 lg:max-w-[360px] lg:w-full z-[1000] p-4 lg:p-0 pointer-events-none">
+        <div className="bg-white/95 backdrop-blur-md px-4 py-3 lg:py-2.5 rounded-2xl lg:rounded-3xl shadow-xl lg:shadow-md flex items-center justify-between border border-white/50 pointer-events-auto">
           <div className="flex items-center gap-3">
              {userRole !== 'driver' && onSwitchRoute && (
                 <button onClick={() => onSwitchRoute('prev')} className="p-1 rounded-full hover:bg-slate-100 active:scale-90"><ChevronLeft className="w-4 h-4 text-slate-400" /></button>
@@ -491,7 +519,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
       <div className="flex-1 w-full relative z-0">
         <div ref={containerRef} className="absolute inset-0" />
         {!isLoading && (
-          <div className="absolute bottom-[340px] right-6 z-[20] flex flex-col gap-3">
+          <div className="absolute bottom-[395px] lg:bottom-[225px] right-6 z-[20] flex flex-col gap-3">
             {/* Lock on Bus Toggle */}
             <button 
                 onClick={handleToggleLock}
@@ -549,19 +577,19 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         <>
             <motion.div 
             drag="y" 
-            dragConstraints={{ top: 0, bottom: screenHeight }} 
+            dragConstraints={{ top: EXPANDED_Y, bottom: screenHeight }} 
             dragElastic={0.2} 
             dragMomentum={false}
             animate={controls} 
             initial={{ y: COLLAPSED_Y }} 
             onDragEnd={handleDragEnd} 
-            className="fixed inset-x-0 bottom-0 z-[1200] bg-white rounded-t-[40px] shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col h-screen overflow-hidden"
+            className="fixed inset-x-0 lg:left-6 lg:right-auto lg:w-[360px] bottom-0 z-[1200] bg-white rounded-t-[40px] lg:rounded-t-3xl shadow-[0_-15px_40px_rgba(0,0,0,0.1)] lg:shadow-2xl flex flex-col h-screen overflow-hidden lg:border-t lg:border-x lg:border-slate-100"
             >
-            <div className="w-full pt-4 pb-8 cursor-grab active:cursor-grabbing">
+            <div className="w-full pt-4 pb-4 lg:pb-6 cursor-grab active:cursor-grabbing">
                 <div className="w-16 h-1.5 bg-slate-200 rounded-full mx-auto"></div>
             </div>
-            <div className="px-8 pb-32 flex-1 overflow-y-auto no-scrollbar">
-                <div className="flex justify-between items-end mb-8">
+            <div className="px-6 lg:px-8 pb-24 lg:pb-32 flex-1 overflow-y-auto no-scrollbar">
+                <div className="flex justify-between items-end mb-4 lg:mb-8">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <Clock className="w-4 h-4 text-yellow-500" />
@@ -570,7 +598,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
                     <h1 className="text-4xl font-black text-slate-900">{route.isLive ? route.eta : 'Offline'}</h1>
                 </div>
                 </div>
-                <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-8">
+                <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100 mb-4 lg:mb-8">
                 <div className="flex items-center gap-4">
                     <UserCircle className="w-12 h-12 text-slate-400" />
                     <div>
