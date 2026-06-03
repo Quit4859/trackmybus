@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, AlertTriangle } from 'lucide-react';
+import Markdown from 'react-markdown';
 import { ChatMessage } from '../types.ts';
 import { sendChatMessage } from '../services/geminiService.ts';
 import { BotIcon } from './BotIcon.tsx';
-import Markdown from 'react-markdown';
 
 interface AIChatbotProps {
   onEmergency?: () => void;
@@ -73,7 +73,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
   return (
     <div className="flex flex-col h-full bg-slate-50 pb-20 lg:pb-24 lg:pt-4">
       <div className="flex-1 w-full max-w-2xl mx-auto flex flex-col bg-white lg:shadow-xl lg:rounded-3xl lg:border lg:border-slate-150 overflow-hidden relative">
-        <div className="bg-white pt-10 pb-4 px-4 lg:p-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
+        <div className="bg-white p-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <BotIcon className="w-6 h-6 text-yellow-500" />
@@ -97,31 +97,31 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency }) => {
               className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[85%] sm:max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                className={`max-w-[80%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
                   msg.sender === 'user'
                     ? 'bg-slate-900 text-white rounded-br-none'
                     : 'bg-white text-slate-700 rounded-bl-none border border-slate-100'
                 }`}
               >
-                {msg.sender === 'user' ? (
-                  <div className="whitespace-pre-wrap">{msg.text}</div>
-                ) : (
-                  <div className="markdown-body text-slate-700 space-y-1">
-                    <Markdown
-                      components={{
-                        ul: ({ children }) => <ul className="list-disc pl-4 my-1 space-y-1 text-slate-700">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal pl-4 my-1 space-y-1 text-slate-700">{children}</ol>,
-                        li: ({ children }) => <li className="text-slate-700 leading-relaxed pl-0.5">{children}</li>,
-                        p: ({ children }) => <p className="mb-1 last:mb-0 leading-relaxed text-slate-700">{children}</p>,
-                        strong: ({ children }) => <strong className="font-bold text-slate-900">{children}</strong>,
-                        h1: ({ children }) => <h1 className="text-sm font-bold mt-2 mb-1 text-slate-900 border-b border-slate-100 pb-0.5">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-xs font-bold mt-1.5 mb-1 text-slate-900">{children}</h2>,
-                      }}
-                    >
-                      {msg.text}
-                    </Markdown>
-                  </div>
-                )}
+                <div className="markdown-body">
+                  <Markdown
+                    components={{
+                      ul: ({ ...props }) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
+                      ol: ({ ...props }) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
+                      li: ({ ...props }) => <li className="my-0.5" {...props} />,
+                      h1: ({ ...props }) => <h1 className="text-base font-bold my-2" {...props} />,
+                      h2: ({ ...props }) => <h2 className="text-sm font-bold my-2" {...props} />,
+                      h3: ({ ...props }) => <h3 className="text-xs font-bold my-1" {...props} />,
+                      p: ({ ...props }) => <p className="mb-2 last:mb-0" {...props} />,
+                      strong: ({ ...props }) => (
+                        <strong className={`font-semibold ${msg.sender === 'user' ? 'text-white' : 'text-slate-900'}`} {...props} />
+                      ),
+                      em: ({ ...props }) => <em className="italic" {...props} />,
+                    }}
+                  >
+                    {msg.text}
+                  </Markdown>
+                </div>
               </div>
             </div>
           ))}

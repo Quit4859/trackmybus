@@ -359,7 +359,7 @@ export default function AdminDashboard({
   return (
     <div className="h-full bg-slate-50 flex flex-col overflow-hidden relative">
       {!isEditing && (
-        <div className="pt-10 pb-6 px-6 lg:p-6 bg-white border-b border-slate-100 shrink-0">
+        <div className="p-6 bg-white border-b border-slate-100 shrink-0">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-black text-slate-900">Fleet Admin</h2>
             <div className="flex gap-2">
