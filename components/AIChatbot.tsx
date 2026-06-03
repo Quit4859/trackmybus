@@ -75,7 +75,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onEmergency, routes = [], buses =
   return (
     <div className="flex flex-col h-full bg-slate-50 pb-20 lg:pb-24 lg:pt-4">
       <div className="flex-1 w-full max-w-2xl mx-auto flex flex-col bg-white lg:shadow-xl lg:rounded-3xl lg:border lg:border-slate-150 overflow-hidden relative">
-        <div className="bg-white pt-12 pb-4 px-4 lg:pt-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
+        <div className="bg-white p-4 shadow-sm z-10 border-b border-slate-100 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <BotIcon className="w-6 h-6 text-yellow-500" />
