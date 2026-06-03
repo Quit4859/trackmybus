@@ -536,7 +536,7 @@ const MapInterface: React.FC<MapInterfaceProps> = ({ route, userLocation, userRo
         )}
       </AnimatePresence>
 
-      <div className="absolute top-0 left-0 right-0 lg:left-6 lg:right-auto lg:top-6 lg:max-w-[360px] lg:w-full z-[1000] p-4 lg:p-0 pointer-events-none">
+      <div className="absolute top-0 left-0 right-0 lg:left-6 lg:right-auto lg:top-6 lg:max-w-[360px] lg:w-full z-[1000] pt-10 pb-4 px-4 lg:p-0 pointer-events-none">
         <div className="bg-white/95 backdrop-blur-md px-4 py-3 lg:py-2.5 rounded-2xl lg:rounded-3xl shadow-xl lg:shadow-md flex items-center justify-between border border-white/50 pointer-events-auto">
           <div className="flex items-center gap-3">
              {userRole !== 'driver' && onSwitchRoute && (
